@@ -1,0 +1,23 @@
+﻿<Window x:Class="Videocall.CameraWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Videocall"
+        mc:Ignorable="d"
+        WindowStyle="None"
+        MouseDown="Window_MouseDown"
+        ResizeMode="CanResize"
+        
+        Loaded="Window_Loaded"
+        MouseDoubleClick="Window_MouseDoubleClick"
+        StateChanged="Window_StateChanged"
+        Title="CameraWindow" Height="216" Width="284.444444444444" Topmost="True" Background="Black" AllowsTransparency="True" BorderBrush="Black">
+
+    <Grid>
+        <Image x:Name="Canvas" HorizontalAlignment="Center" Height="auto" VerticalAlignment="Top" Width="auto" Source="{Binding PrimaryCanvasSource}"/>
+        <Button Content="X" HorizontalAlignment="Right" VerticalAlignment="Top" Height="19" Width="18" Background="IndianRed" Click="CloseWindowBtnClick" Margin="0,5,5,0" WindowChrome.IsHitTestVisibleInChrome="True" />
+
+    </Grid>
+
+</Window>

@@ -1,0 +1,32 @@
+﻿<Window x:Class="Videocall.DebugLogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Videocall"
+        mc:Ignorable="d"
+        AllowsTransparency="True"
+        WindowStyle="None"
+        Closing="Window_Closing"
+        Title="DebugLogWindow" Height="300" Width="600">
+    <Grid>
+        <Grid Background="#262626">
+            <Button Content="╳" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,0,0" Width="33" Click="CrossBtnClick" WindowChrome.IsHitTestVisibleInChrome="True" />
+            <Label Content="Debug Log" HorizontalAlignment="Left" Margin="10,-1,0,0" VerticalAlignment="Top"/>
+            <!--<Button Content="🗖" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,35,0" Width="33" Click="MaximizeBtcClicked" WindowChrome.IsHitTestVisibleInChrome="True"/>
+            <Button Content="🗕" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,70,0" Width="33" Click="MinimizeBtnClick" WindowChrome.IsHitTestVisibleInChrome="True"/>-->
+
+
+        </Grid>
+        <Grid Margin="0,28,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+               
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" x:Name="DebugLog" HorizontalAlignment="Stretch" TextWrapping="Wrap" IsReadOnly="True" VerticalScrollBarVisibility="Visible"
+                 Text="{Binding Path=(local:DebugLogWindow.LogText)}" VerticalAlignment="Stretch" Width="auto" Height="auto"/>
+
+        </Grid>
+        
+    </Grid>
+</Window>
