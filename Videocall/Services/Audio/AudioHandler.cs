@@ -10,8 +10,8 @@ using System.Collections.Immutable;
 using System.Data;
 using System.IO;
 using System.Linq;
-
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Videocall
 {
@@ -27,28 +27,32 @@ namespace Videocall
         [ProtoMember(3)]
         public byte[] Data;
     }
-    class NetworkSampleCollector
+
+    public struct AudioStatistics
     {
-        Dictionary<DateTime,AudioSample> samples = new Dictionary<DateTime, AudioSample>();
+        public int BufferSize;
+        public int BufferedDuration;
+        public int NumLostPackages;
+        public int TotalNumDroppedPAckages;
+    }
+    class JitterBuffer
+    {
+        private Dictionary<DateTime,AudioSample> samples = new Dictionary<DateTime, AudioSample>();
         readonly object locker = new object();
-        MemoryStream sampleStream = new MemoryStream();
+        private MemoryStream sampleStream = new MemoryStream();
         public Action<byte[], int, int> OnSamplesCollected;
-        DateTime LastBatchTimeStamp = DateTime.Now;
+        private DateTime LastBatchTimeStamp = DateTime.Now;
         public int BufferLatency;
         private int NumSqBuffered = 0;
         private int LastSqeNo = 0;
-        AutoResetEvent bufferFullEvent = new AutoResetEvent(false); 
+        private AutoResetEvent bufferFullEvent = new AutoResetEvent(false); 
+        public int NumLostPackages = 0;
 
-        public NetworkSampleCollector(int bufferLatency)
+        public JitterBuffer(int bufferLatency)
         {
             this.BufferLatency = bufferLatency;
             StartPublushing2();
-            //var lines = File.ReadAllLines("test.csv");
-            //byte[] bytes = new byte[lines.Length];
-            //for (int i = 0; i < lines.Length; i++)
-            //{
-            //    bytes[i] = byte.Parse(lines[i]);
-            //}
+           
         }
         // publish if anything is in buffer.
         public void StartPublushing2()
@@ -57,15 +61,17 @@ namespace Videocall
             {
                 while (true)
                 {
-                    //Thread.Sleep(BufferLatency);
                     bufferFullEvent.WaitOne();
                     lock (locker)
                     {
-                        if (samples.Count < 2)
-                            continue;
+                        //if (samples.Count < 11)
+                        //    continue;
+
 
                         var samplesOrdered = samples.OrderByDescending(x => x.Key).Reverse();
-                        samplesOrdered = samplesOrdered.Take(samplesOrdered.Count() - 10);
+                        //samplesOrdered = samplesOrdered.Take(samplesOrdered.Count() - 10);
+                        int toTake = Math.Min(2, NumSqBuffered) + (samplesOrdered.Count() - (BufferLatency / 20));
+                        samplesOrdered = samplesOrdered.Take(Math.Min(toTake, samplesOrdered.Count()));
 
                         LastBatchTimeStamp = samplesOrdered.Last().Key;
 
@@ -77,12 +83,15 @@ namespace Videocall
                             {
                                 sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
                             }
+                            // lost packets we conceal them here
                             else
                             {
                                 int delta = sampArry[i + 1].Value.SquenceNumber - sampArry[i].Value.SquenceNumber;
                                 for (int j = 0; j < delta - 1; j++)
                                 {
                                     sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
+                                    NumLostPackages++;
+                                    Console.WriteLine("Drop");
                                 }
 
 
@@ -91,76 +100,14 @@ namespace Videocall
                             NumSqBuffered--;
 
                         }
-                       
-                        try
-                        {
-                            OnSamplesCollected?.Invoke(sampleStream.GetBuffer(), 0, (int)sampleStream.Position);
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(e.Message);
-                        }
-
-                        sampleStream.Position = 0;
-                    }
-
-                }
-            });
-            t.Priority = ThreadPriority.AboveNormal;
-            t.Start();
-        }
-        public void StartPublushing()
-        {
-            Thread t = new Thread(() =>
-            {
-                while (true)
-                {
-                    Thread.Sleep(BufferLatency);
-                    //bufferFullEvent.WaitOne();
-                    lock (locker)
-                    {
-                        if (samples.Count < 1)
-                            continue;
-
-                        var samplesOrdered = samples.OrderByDescending(x => x.Key).Reverse();
-                        //samplesOrdered = samplesOrdered.Take(samplesOrdered.Count() -10);
-
-                        LastBatchTimeStamp = samplesOrdered.Last().Key;
-
-                        var sampArry = samplesOrdered.ToImmutableArray();
-                        for (int i = 0; i < sampArry.Length-1; i++)
-                        {
-                            //for (int k = 0; k < sampArry[i].Value.Data.Length; k++)
-                            //{
-                            //    //if(sampArry[i].Value.Data[k] !=255 && sampArry[i].Value.Data[k] != 127)
-                            //    //{
-
-                            //    //}
-                            //}
-                            if (sampArry[i].Value.SquenceNumber+1 == sampArry[i + 1].Value.SquenceNumber)
-                            {
-                                sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
-                            }
-                            else
-                            {
-                                int delta = sampArry[i + 1].Value.SquenceNumber - sampArry[i].Value.SquenceNumber;
-                                for (int j = 0; j < delta-1; j++)
-                                {
-                                    
-                                    //sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
-                                }
-
-
-                            }
-                            samples.Remove(sampArry[i].Key);
-                            NumSqBuffered--;
-
-                        }
-                        //foreach (var sample in samplesOrdered)
+                        //if (numDrops > 2)
                         //{
-                        //    sampleStream.Write(sample.Value.Data, 0, sample.Value.Data.Length);
+                        //    BufferLatency += 20;
+                        //    Console.WriteLine("Increased");
+
                         //}
 
+
                         try
                         {
                             OnSamplesCollected?.Invoke(sampleStream.GetBuffer(), 0, (int)sampleStream.Position);
@@ -171,7 +118,6 @@ namespace Videocall
                         }
 
                         sampleStream.Position = 0;
-                        //samples.Clear();
                     }
 
                 }
@@ -188,12 +134,30 @@ namespace Videocall
                 {
                     samples.Add(sample.Timestamp, sample);
                     NumSqBuffered++;
-                    if(NumSqBuffered >= 20)
+                    if(NumSqBuffered >= BufferLatency/20)
                     {
                         bufferFullEvent.Set();
                     }
                 }
             }
+        }
+
+        public void DiscardSamples(int num)
+        {
+            lock (locker)
+            {
+                var samplesOrdered = samples.OrderByDescending(x => x.Key).Reverse();
+                //samplesOrdered = samplesOrdered.Take(samplesOrdered.Count() - 10);
+                samplesOrdered = samplesOrdered.Take(Math.Min(num, samplesOrdered.Count()));
+
+                foreach (var item in samplesOrdered)
+                {
+                    samples.Remove(item.Key);
+                    NumSqBuffered--;
+
+                }
+            }
+               
         }
 
        
@@ -202,6 +166,7 @@ namespace Videocall
     {
 
         public Action<AudioSample> OnAudioAvailable;
+        public Action<AudioStatistics> OnStatisticsAvailable;
         private WaveOutEvent player;
         private BufferedWaveProvider soundListenBuffer;
         private WaveInEvent waveIn;
@@ -211,12 +176,21 @@ namespace Videocall
         private ConcurrentProtoSerialiser serialiser = new ConcurrentProtoSerialiser();
         DateTime lastSampleTime = DateTime.Now;
 
-        private NetworkSampleCollector collector;
+        private JitterBuffer collector;
         public bool SendTwice = false;
 
-        private int bufferLatency = 60;
-        public int BufferLatency { get => bufferLatency; set { bufferLatency = value; collector.BufferLatency = value; } }
-        private float gain=1;
+        private int bufferLatency = 200;
+        public int BufferLatency { get => bufferLatency; 
+            set 
+            {
+                if(value<bufferLatency)
+                    collector.DiscardSamples((int)soundListenBuffer.BufferDuration.TotalMilliseconds/20);
+                // drop the amount of buffered duration
+                bufferLatency = value; 
+                collector.BufferLatency = value;
+            }
+        }
+        private float gain=3;
         public float Gain { get => gain; set { volumeSampleProvider.Volume = value; gain = value; } }
         public TimeSpan BufferedDuration =>soundListenBuffer.BufferedDuration;
 
@@ -224,29 +198,59 @@ namespace Videocall
 
         private MemoryStreamPool streamPool = new MemoryStreamPool();
         private ushort currentSqnNo;
+        private int lastLostPackckageAmount = 0;
         public AudioHandler()
         {
             soundListenBuffer = new BufferedWaveProvider(format);
-            soundListenBuffer.BufferLength = format.SampleRate/2;
+            soundListenBuffer.BufferLength = format.SampleRate;
             soundListenBuffer.DiscardOnBufferOverflow = true;
 
             volumeSampleProvider = new VolumeSampleProvider(soundListenBuffer.ToSampleProvider());
             volumeSampleProvider.Volume = Gain; // double the amplitude of every sample - may go above 0dB
 
             player = new WaveOutEvent();
-            player.DesiredLatency = BufferLatency;
+            player.DesiredLatency = 60;
             player.Init(volumeSampleProvider);
             player.Volume = 1;
 
             
-            collector = new NetworkSampleCollector(BufferLatency);
-            collector.OnSamplesCollected += ProcessAudio;
+            collector = new JitterBuffer(BufferLatency);
+            collector.OnSamplesCollected += ProcessBufferedAudio;
 
             waveIn = new WaveInEvent();
             waveIn.WaveFormat = format;
             waveIn.BufferMilliseconds = 20;
             waveIn.DataAvailable += MicAudioRecieved;
-            
+
+            Task.Run(async() =>
+            {
+                while (true)
+                {
+                    await Task.Delay(1000);
+                    OnStatisticsAvailable?.Invoke(GetStatisticalData());
+                }
+
+            });
+
+        }
+
+        public AudioStatistics GetStatisticalData()
+        {
+            var data = new AudioStatistics()
+            {
+                BufferedDuration = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds,
+                BufferSize = (int)soundListenBuffer.BufferDuration.TotalMilliseconds,
+                TotalNumDroppedPAckages = collector.NumLostPackages,
+                NumLostPackages = collector.NumLostPackages - lastLostPackckageAmount,
+
+            };
+            lastLostPackckageAmount = collector.NumLostPackages;
+            return data;
+        }
+
+        public void ResetStatistics()
+        {
+            collector.NumLostPackages= 0;
         }
 
         private void MicAudioRecieved(object sender, WaveInEventArgs e)
@@ -277,31 +281,30 @@ namespace Videocall
                     }
                    
                 }
-                   
 
+                //debug jitter
                 return;
 
-                if (/*false &&*/ currentSqnNo%20 != 0 && currentSqnNo % 19 != 0 && currentSqnNo % 18 != 0)
-                OnAudioAvailable?.Invoke(sample);
+                if (false && currentSqnNo % 20 != 0 && currentSqnNo % 19 != 0 && currentSqnNo % 18 != 0)
+                    ProcessAudio(sample);
                 else
                 {
-                    //Task.Run(async () =>
-                    //{
-                    //    Random r = new Random(DateTime.Now.Millisecond);
-                    //    await Task.Delay(r.Next(0, 100));
-                    //    OnAudioAvailable?.Invoke(sample);
+                    Task.Run(async () =>
+                    {
+                        Random r = new Random(DateTime.Now.Millisecond);
+                        await Task.Delay(r.Next(0, 300));
+                        ProcessAudio(sample);
 
 
-                    //});
+
+                    });
                 }
-               
-                //if(SendTwice)
-                //    OnAudioAvailable?.Invoke(sample);
+
+
             }
             catch { }
         }
 
-      
 
         public void ProcessAudio(AudioSample sample)
         {
@@ -315,30 +318,16 @@ namespace Videocall
 
         }
 
-        private void ProcessAudio(byte[] soundBytes)
+        
+
+        private void ProcessBufferedAudio(byte[] soundBytes,int offset, int count)
         {
-            //var res = Decode(soundBytes, 0, soundBytes.Length);
-            //soundListenBuffer?.AddSamples(res, 0, res.Length);
-            MemoryStream DecodeStream = streamPool.RentStream();
-
-            Decode(DecodeStream, soundBytes, 0, soundBytes.Length);
-            soundListenBuffer?.AddSamples(DecodeStream.GetBuffer(), 0, (int)DecodeStream.Position);
-
-            streamPool.ReturnStream(DecodeStream);
-
-        }
-
-        private void ProcessAudio(byte[] soundBytes,int offset, int count)
-        {
-
-            //var res = Decode(soundBytes, offset, count);
-            //soundListenBuffer?.AddSamples(res, 0, res.Length);
-
             MemoryStream DecodeStream = streamPool.RentStream();
 
             Decode(DecodeStream, soundBytes, offset, count);
             soundListenBuffer?.AddSamples(DecodeStream.GetBuffer(), 0, (int)DecodeStream.Position);
-
+            //Console.WriteLine(soundListenBuffer.BufferDuration.TotalMilliseconds);
+            //Console.WriteLine(soundListenBuffer.BufferedDuration.TotalMilliseconds);
             streamPool.ReturnStream(DecodeStream);
 
         }
@@ -363,6 +352,7 @@ namespace Videocall
             waveIn.StartRecording();
         }
 
+        #region Encode - Decode Mlaw
 
         public byte[] Encode(byte[] data, int offset, int length)
         {
@@ -419,6 +409,12 @@ namespace Videocall
             decodeInto.Position = length * 2;
 
 
+        }
+
+        #endregion
+        internal void FlushBuffers()
+        {
+            collector.DiscardSamples(100);
         }
     }
 }

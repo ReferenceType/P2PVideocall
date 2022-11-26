@@ -41,12 +41,8 @@ namespace Videocall
                 result = "timeout";
                 try
                 {
-                    //System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess();
-                    ////var name = Windows.ApplicationModel.Package.Current.Id.FullName;
-                    //var h = ToastNotificationManager.History.GetHistory(p.Id.ToString());
-
+                    // only on uwp so far.
                     ToastNotificationManager.History.Remove(notificationId);
-                    //ToastNotificationManager.History.Clear();
 
                 }
                 catch(Exception e)

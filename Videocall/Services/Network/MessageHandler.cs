@@ -1,4 +1,5 @@
-﻿using Protobuff;
+﻿using ProtoBuf.Meta;
+using Protobuff;
 using Protobuff.P2P;
 using System;
 using System.Collections.Generic;
@@ -27,8 +28,15 @@ namespace Videocall
             client.OnMessageReceived += TcpMessageReceived;
             client.OnUdpMessageReceived += UdpMessageReceived;
             client.OnPeerRegistered += HandlePeerRegistered;
+            client.OnPeerUnregistered += HandlePeerUnregistered;
 
             client.StartPingService();
+        }
+
+        private void HandlePeerUnregistered(Guid obj)
+        {
+            registeredPeers.Remove(obj);
+
         }
 
         private void HandlePeerRegistered(Guid id)

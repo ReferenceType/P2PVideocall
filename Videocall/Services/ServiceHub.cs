@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Protobuff;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,6 +31,38 @@ namespace Videocall
             MessageHandler = messageHandler;
             FileShare = fileSHare;
             LatencyPublisher = latencyPublisher;
+
+            messageHandler.OnMessageAvailable += HandleMessage;
+
+            CallStateManager.StaticPropertyChanged += CallStateChanged;
+            AudioHandler.OnStatisticsAvailable += OnAudioStatsAvailable;
+        }
+
+        private void HandleMessage(MessageEnvelope message)
+        {
+            if(message.Header == "MicClosed")
+            {
+                AudioHandler.FlushBuffers();
+            }
+            else if (message.Header == "RemoteClosedCam")
+            {
+                VideoHandler.FlushBuffers();
+            }
+        }
+
+        private void OnAudioStatsAvailable(AudioStatistics stats)
+        {
+            VideoHandler.AudioBufferLatency = stats.BufferedDuration;
+        }
+
+        private void CallStateChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+           if(CallStateManager.GetState() == CallStateManager.CallState.OnCall)
+            {
+                AudioHandler.ResetStatistics();
+                AudioHandler.FlushBuffers();
+                VideoHandler.FlushBuffers();
+            }
         }
     }
 }

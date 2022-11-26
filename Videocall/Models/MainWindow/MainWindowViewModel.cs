@@ -82,6 +82,7 @@ public class MainWindowViewModel : PropertyNotifyBase
 
     private void HandleMicChecked(bool value)
     {
+        model.HandleMicChecked(value);
     }
 
 

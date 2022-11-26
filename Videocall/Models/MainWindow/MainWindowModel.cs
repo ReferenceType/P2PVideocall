@@ -176,7 +176,13 @@ internal class MainWindowModel
                     var response = await services.MessageHandler.client.SendRequestAndWaitResponse(peerId, env, 10000);
                     if (response.Header != MessageEnvelope.RequestTimeout)
                     {
-                        string name = response.KeyValuePairs[peerId.ToString()];
+                        if (response.KeyValuePairs == null)
+                        {
+                            services.MessageHandler.registeredPeers.Remove(peerId);
+                            return;
+                        }
+
+                            string name = response.KeyValuePairs[peerId.ToString()];
                         peers.TryAdd(peerId, name);
                         var info = services.MessageHandler.client.GetPeerInfo(peerId);
                         info.IP = IPAddress.Parse(info.IP).MapToIPv4().ToString();
@@ -239,7 +245,7 @@ internal class MainWindowModel
                 foreach (var item in fileDatas)
                 {
                     DispatcherRun(() => mainWindowViewModel.FTProgressText = "Sending file: " + item.FilePath);
-                    await services.MessageHandler.client.SendRequestAndWaitResponse(selectedPeer, item, null, 60000);
+                    await services.MessageHandler.client.SendRequestAndWaitResponse(selectedPeer, item, null, Math.Min(10000,item.Data.Length/100));
                     mainWindowViewModel.WriteChatEntry("Info", "Sent file: " + item.FilePath);
 
                 }
@@ -382,6 +388,11 @@ internal class MainWindowModel
         services.AudioHandler.ProcessAudio(message);
 
     }
+    internal void HandleMicChecked(bool value)
+    {
+        if(CallStateManager.GetState()== CallStateManager.CallState.OnCall)
+            services.MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(),new MessageEnvelope() { Header = "MicClosed" });
+    }
 
     #endregion
 
@@ -422,13 +433,17 @@ internal class MainWindowModel
         try
         {
             var info = services.MessageHandler.Serializer.UnpackEnvelopedMessage<PeerInfo>(message);
-            var result = await AsyncToastNotificationHandler.ShowCallNotification(info.Name);
+            var t1 = AsyncToastNotificationHandler.ShowCallNotification(info.Name);
+            var t2 = AlertWindow.ShowCallDialog(info.Name);
+
+            var result = await Task.WhenAny(t1, t2).Result;
 
             message.Header = "CallResponse";
             message.KeyValuePairs = new Dictionary<string, string>
             {
                 { "Result", result }
             };
+            AlertWindow.CancelDialog();
             DebugLogWindow.AppendLog("Info", "Sending Result: " + result);
 
             services.MessageHandler.client.SendAsyncMessage(message.From, message);
@@ -502,7 +517,7 @@ internal class MainWindowModel
         }
     }
 
-    
+  
 }
 
 

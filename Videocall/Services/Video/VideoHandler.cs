@@ -5,7 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
-
+using System.Threading.Tasks;
 
 namespace Videocall
 {
@@ -25,21 +25,36 @@ namespace Videocall
         public Action<Mat> OnNetworkFrameAvailable;
 
         public int captureRateMs = 50;
-        public int compressionLevel = 30;
+        public int compressionLevel = 83;
 
         private bool captureRunning = false;
         private ConcurrentDictionary<DateTime,Mat> frameQueue = new ConcurrentDictionary<DateTime, Mat>();
         private AutoResetEvent imgReady = new AutoResetEvent(false);
         private DateTime lastProcessedTimestamp = DateTime.Now;
+        private int frameCount;
+        private int frameRate = 0;
+
+        public int VideoLatency { get; internal set; } = 200;
+        public int AudioBufferLatency { get; internal set; } = 0;
 
         public VideoHandler()
         {
+            Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(1000);
+                    int count = Interlocked.Exchange(ref frameCount, 0);
+                    frameRate = Math.Max(count,1);
+                }
+               
+            });
             Thread t = new Thread(() =>
             {
                 while (true)
                 {
                     imgReady.WaitOne();
-                    if(frameQueue.Count > 3)
+                    while(frameQueue.Count > (VideoLatency+AudioBufferLatency)/(1000/frameRate))
                     {
                         var samplesOrdered = frameQueue.OrderByDescending(x => x.Key);
                         var lastFrame= samplesOrdered.Last();
@@ -94,7 +109,7 @@ namespace Videocall
             {
                 try
                 {
-                    while (capture.IsOpened())
+                    while (capture!= null && capture.IsOpened())
                     {
                         capture.Read(frame);
                         //ImwriteFlags
@@ -119,8 +134,8 @@ namespace Videocall
                             int a = imageBytes.Length;
                             Console.WriteLine(a);
                             //imageBytes = frame.ImEncode(ext: ".jpg", param);
-                            //int b = imageBytes.Length;
-                            //Console.WriteLine(b);
+                            int b = imageBytes.Length;
+                            Console.WriteLine(b);
 
 
                             OnCameraImageAvailable?.Invoke(imageBytes,frame);
@@ -147,6 +162,12 @@ namespace Videocall
             Mat img = Cv2.ImDecode(payload.Frame, ImreadModes.Unchanged);
             frameQueue[payload.TimeStamp] = img;
             imgReady.Set();
+            Interlocked.Increment(ref frameCount);
+        }
+
+        internal void FlushBuffers()
+        {
+            frameQueue.Clear();
         }
     }
 }

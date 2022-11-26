@@ -6,15 +6,15 @@
         xmlns:local="clr-namespace:Videocall"
         mc:Ignorable="d"
         WindowStyle="None"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         ResizeMode="CanResize"
         
         Closing="Window_Closing"
         StateChanged="Window_StateChanged"
        
         Title="VideoCall" 
-        Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="600" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}"
-        BorderThickness="0,0,0,0">
+        Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="550" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}"
+        BorderThickness="1,1,1,1" BorderBrush="#505050">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -190,6 +190,7 @@
                     <Grid HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="214" >
                         <Rectangle HorizontalAlignment="Left" Height="212" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="3.944" RadiusY="3.944"/>
                         <Rectangle HorizontalAlignment="Left" Height="212" Margin="205,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                        <Rectangle HorizontalAlignment="Left" Height="212" Margin="410,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
 
                         <Label Content="Audio Settings" HorizontalAlignment="Left" Margin="266,0,0,0" VerticalAlignment="Top"/>
                         <Label Content="Video Settings" HorizontalAlignment="Left" Margin="52,1,0,0" VerticalAlignment="Top"/>
@@ -205,13 +206,24 @@
                                   IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
 
                         <Label Content="Volume" HorizontalAlignment="Left" Margin="211,84,0,0" VerticalAlignment="Top"/>
-                        <Slider HorizontalAlignment="Left" Margin="211,115,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="100"
+                        <Slider HorizontalAlignment="Left" Margin="211,115,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="50"
                                 Value="{Binding SettingsViewModel.VolumeValue}"/>
                         <CheckBox Foreground="WhiteSmoke" Content="SendDoubleAudio" HorizontalAlignment="Left" Margin="214,64,0,0" VerticalAlignment="Top" 
-                                  IsChecked="{Binding SettingsViewModel.SendDoubleAudiocheck}" />
-                        <Label Content="BufferDuration" HorizontalAlignment="Left" Margin="205,138,0,0" VerticalAlignment="Top"/>
-                        <Slider HorizontalAlignment="Left" Margin="211,164,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="500" Minimum="60"
+                                  IsChecked="{Binding SettingsViewModel.SendDoubleAudiocheck}"  />
+                        <Label Content="Jitter Buffer Duration" HorizontalAlignment="Left" Margin="210,138,0,0" VerticalAlignment="Top"/>
+                        <Slider HorizontalAlignment="Left" Margin="211,164,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="600" Minimum="60"
                                 Value="{Binding SettingsViewModel.BufferDurationValue}"/>
+
+                        <TextBlock HorizontalAlignment="Left" Margin="484,5,0,0" TextWrapping="Wrap" Text="Statistics" VerticalAlignment="Top"/>
+                        <TextBlock HorizontalAlignment="Left" Margin="422,46,0,0" TextWrapping="Wrap" Text="Buffer Level" VerticalAlignment="Top"/>
+                        <ProgressBar HorizontalAlignment="Left" Height="10" Margin="497,49,0,0" VerticalAlignment="Top" Width="100" Background="Black"
+                                     
+                                     Value="{Binding SettingsViewModel.BufferedDurationPercentage}"/>
+                        <TextBlock HorizontalAlignment="Left" Margin="422,80,0,0" TextWrapping="Wrap" 
+                                   Text="{Binding SettingsViewModel.TotalNumLostPackages}" VerticalAlignment="Top"/>
+                        <TextBlock HorizontalAlignment="Left" Margin="422,111,0,0" TextWrapping="Wrap" 
+                                   Text="{Binding SettingsViewModel.PackageLossRate}" VerticalAlignment="Top"/>
+                        
 
 
                     </Grid>

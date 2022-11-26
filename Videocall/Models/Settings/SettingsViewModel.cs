@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Videocall.Services.HttpProxy;
+using Windows.Media.Capture;
 
 namespace Videocall.Settings
 {
@@ -19,11 +20,15 @@ namespace Videocall.Settings
 
         private string tcpLatency;
         private string udpLatency;
+        private string totalNumLostPackages;
+        private string packageLossRate;
 
         private double fpsSliderValue = 30;
-        private double imageQualitySliderValue=8.3;
-        private double volumeValue = 2;
+        private double imageQualitySliderValue=8.3d;
+        private double volumeValue = 3;
         private double bufferDurationValue = 200;
+
+        private int bufferedDurationPercentage;
 
         private bool listenYourselfCheck = false;
         private bool sendDoubleAudiocheck;
@@ -107,9 +112,16 @@ namespace Videocall.Settings
 
 
         private ServiceHub services;
+        private bool holePunchRequestActive;
+
         public SettingConfig Config { get; set; } = SettingConfig.Instance;
         public string TcpLatency { get => tcpLatency; set { tcpLatency = value; OnPropertyChanged(); } }
         public string UdpLatency { get => udpLatency; set { udpLatency = value; OnPropertyChanged(); } }
+
+        public string TotalNumLostPackages { get => totalNumLostPackages; set { totalNumLostPackages = value; OnPropertyChanged(); } }
+        public string PackageLossRate { get => packageLossRate; set { packageLossRate = value; OnPropertyChanged(); } }
+
+        public int BufferedDurationPercentage { get => bufferedDurationPercentage; set { bufferedDurationPercentage = value; OnPropertyChanged(); } }
 
         internal SettingsViewModel(ServiceHub services)
         {
@@ -123,7 +135,17 @@ namespace Videocall.Settings
             services.MessageHandler.client.OnDisconnected += OnDisconnected;
             services.LatencyPublisher.Latency += OnLatencyAvailable;
 
+            services.AudioHandler.OnStatisticsAvailable += HandleAudioStatistics;
+
             HandleConnectRequest(null);
+        }
+
+        private void HandleAudioStatistics(AudioStatistics stats)
+        {
+            TotalNumLostPackages = "Total Lost Packages : "+stats.TotalNumDroppedPAckages.ToString();
+            PackageLossRate = "Lost Package Rate/s : "+stats.NumLostPackages;
+
+            BufferedDurationPercentage = (int)(((float)stats.BufferedDuration / (float)stats.BufferSize) *100);
         }
 
         private async void HandleProxyIpRequested(object obj)
@@ -135,7 +157,7 @@ namespace Videocall.Settings
                     DispatcherRun(() => { LogText += "\nUnable To Retrieve Ip"; });
                 else
                     SettingConfig.Instance.Ip = ip;
-                DispatcherRun(() => { LogText += "\nSucessfully retieved  the IP: " +ip; });
+                DispatcherRun(() => { LogText += "\nSucessfully retrieved  the IP: " +ip; });
 
             }
             catch (Exception ex)
@@ -181,6 +203,10 @@ namespace Videocall.Settings
         }
         private async void OnHolePunchClicked(object obj)
         {
+            if (holePunchRequestActive) 
+                return;
+
+            holePunchRequestActive = true;
             foreach (var peerId in services.MessageHandler.registeredPeers)
             {
                 try
@@ -196,6 +222,7 @@ namespace Videocall.Settings
                 {
                     AddLog("\nError: " + ee.Message);
                 }
+                finally { holePunchRequestActive = false; }
             }
 
         }
@@ -237,6 +264,7 @@ namespace Videocall.Settings
         private void HandleBufferDurationChanged(double value)
         {
             services.AudioHandler.BufferLatency = (int)value;
+            services.VideoHandler.VideoLatency = (int)value;
 
         }
        

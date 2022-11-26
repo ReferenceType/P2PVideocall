@@ -254,7 +254,7 @@
             </Style.Resources>
         </Style>
 
-        <Style TargetType="{x:Type Rectangle}">
+        <Style x:Key="RoundRectangle" TargetType="{x:Type Rectangle}">
             <Style.Resources>
                 <Style TargetType="{x:Type Border}">
                     <Setter Property="CornerRadius" Value="8" />

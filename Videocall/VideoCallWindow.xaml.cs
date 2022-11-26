@@ -51,10 +51,9 @@ namespace Videocall
 
             MainWindowViewModel = new MainWindowViewModel(hub);
             MainWindowViewModel.SrollToEndChatWindow+= ()=> MessageWindow.ScrollToEnd();
-
             SettingsViewModel = new SettingsViewModel(hub);
-            DataContext= this;
 
+            DataContext= this;
             cameraWindow.DataContext = MainWindowViewModel;
 
             InitializeComponent();
@@ -243,6 +242,7 @@ namespace Videocall
                 DebugLogWindow.Instance.Hide();
 
         }
+
     }
 
 }
