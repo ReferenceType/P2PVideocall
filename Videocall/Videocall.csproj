@@ -103,10 +103,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="AlertWindow.xaml.cs">
+    <Compile Include="Windows\AlertWindow.xaml.cs">
       <DependentUpon>AlertWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="DebugLogWindow.xaml.cs">
+    <Compile Include="Windows\DebugLogWindow.xaml.cs">
       <DependentUpon>DebugLogWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\CallStateManager.cs" />
@@ -123,22 +123,22 @@
     <Compile Include="Services\ServiceHub.cs" />
     <Compile Include="Models\Settings\SettingConfig.cs" />
     <Compile Include="Services\Notifications\ToastNotificationHandler.cs" />
-    <Compile Include="CameraWindow.xaml.cs">
+    <Compile Include="Windows\CameraWindow.xaml.cs">
       <DependentUpon>CameraWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\File Transfer\FileShare.cs" />
     <Compile Include="Models\MainWindow\PeerInfo.cs" />
     <Compile Include="Models\Settings\SettingsViewModel.cs" />
     <Compile Include="Services\Video\VideoHandler.cs" />
-    <Page Include="AlertWindow.xaml">
+    <Page Include="Windows\AlertWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="CameraWindow.xaml">
+    <Page Include="Windows\CameraWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="DebugLogWindow.xaml">
+    <Page Include="Windows\DebugLogWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
