@@ -8,6 +8,7 @@ Tested and achieved stable calls between 1.204,5 km distance clients
 - File-Folder Transfer 
 ## Technical features
 - Udp Hole punching
+- End to End encyrption on Tcp And Udp
 - Toast notifications
 - Dynamic Jitter Buffer
 - Statistics data for nerds
