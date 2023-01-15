@@ -50,6 +50,7 @@ namespace Videocall
         {
             instance= this;
             var chr = new WindowChrome();
+            chr.ResizeBorderThickness = new Thickness(10, 10, 10, 10);
             WindowChrome.SetWindowChrome(this, chr);
             InitializeComponent();
         }

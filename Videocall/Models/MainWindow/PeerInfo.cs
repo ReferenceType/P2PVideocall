@@ -28,8 +28,6 @@ namespace Videocall
         {
         }
 
-      
-
         [ProtoMember(1)]
         public string Name { get; }
         [ProtoMember(2)]

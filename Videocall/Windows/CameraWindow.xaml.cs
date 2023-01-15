@@ -18,6 +18,8 @@ namespace Videocall
             CallStateManager.StaticPropertyChanged += CallHandlerStateChanged;
             var chr = new WindowChrome();
             //chr.GlassFrameThickness =  new Thickness(1,1,1,1);
+            chr.ResizeBorderThickness = new Thickness(10, 10, 10, 10);
+
             WindowChrome.SetWindowChrome(this, chr);
         }
 
@@ -57,7 +59,12 @@ namespace Videocall
         {
             this.Hide();
             Owner.WindowState = WindowState.Normal;
-            Owner.Topmost = true;
+            App.ShowMainWindow();
+        }
+
+        private void Window_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            
         }
     }
 }

@@ -1,46 +1,53 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Windows.Media.Protection.PlayReady;
 using static Videocall.VideoCallWindow;
 
 namespace Videocall.Services.HttpProxy
 {
-    public class UpdateAdress
-    {
-        public string Ip { get; set; }
-
-        public string Id { get; set; }
-    }
+   
     internal class IpRetriever
     {
-        static string Uri = @"http://localhost:8001/";
-        public IpRetriever() { }
+        public static string Uri = @"http://relayproxy.ddns.net:8001/ip";
+        static IpRetriever() 
+        {
+            string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string path = workingDir + "/Settings/StaticIpInfo.txt";
+            if (!File.Exists(path))
+            {
+                Uri = "http://127.0.0.1:8001/ip";
+                File.WriteAllText(path,Uri);
+            }
+            else
+            {
+                 Uri = File.ReadAllText(path);
+            }
+
+        }
         public static async Task<string> ObtainIp()
         {
-            try
-            {
-                HttpClient cl = new HttpClient();
+            HttpClient httpClient = new HttpClient();
 
-                var uri_ = Uri;
-                var result = await cl.GetAsync(uri_);
-                var str = await result.Content.ReadAsStringAsync();
+            var result = await httpClient.GetAsync(Uri);
+            var str = await result.Content.ReadAsStreamAsync();
+            byte[] bytes = new byte[4];
 
-                var IPinfo = JsonSerializer.Deserialize<UpdateAdress>(str);
-                if (IPinfo.Ip != null && IPinfo.Ip != "unknown")
-                    //SettingConfig.Instance.Ip = IPinfo.Ip;
-                    return IPinfo.Ip;
-                return null;
-            }
-            catch 
-            {
-                throw;
-                //DispatcherRun(() => { SettingsViewModel.LogText += "\nUnable To Retrieve Ip"; });
-            }
+            str.Read(bytes, 0, 4);
+
+            if (bytes[0] != 0 && bytes[1] != 0 && bytes[2] != 0 && bytes[3] != 0)
+
+                return bytes[0].ToString()
+                    + "." + bytes[1].ToString()
+                    + "." + bytes[2].ToString()
+                    + "." + bytes[3].ToString();
+            return null;
+
         }
     }
 }

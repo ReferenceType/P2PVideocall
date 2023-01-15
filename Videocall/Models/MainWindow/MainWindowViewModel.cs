@@ -1,11 +1,16 @@
 ﻿using System;
 using System.Collections.ObjectModel;
-
+using System.IO;
+using System.Linq;
+using System.Media;
+using System.Reflection;
+using System.Runtime.InteropServices.ComTypes;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Videocall;
-
+using Videocall.Models;
+using Videocall.Models.MainWindow;
 
 public class MainWindowViewModel : PropertyNotifyBase
 {
@@ -13,10 +18,11 @@ public class MainWindowViewModel : PropertyNotifyBase
     private string chatInputText;
     private string fTProgressText;
     private bool cameraChecked;
+    private bool shareScreenChecked;
     private bool microponeChecked = false;
     private bool endCallVisibility = false;
-    private double windowWidth=800;
-    private double windowHeight=550;
+    private double windowWidth=1330;
+    private double windowHeight=800;
 
 
     public Action SrollToEndChatWindow;
@@ -53,6 +59,8 @@ public class MainWindowViewModel : PropertyNotifyBase
     
     public ObservableCollection<PeerInfo> PeerInfos { get; set; } = new ObservableCollection<PeerInfo>();
 
+    public ObservableCollection<ChatDataModel> ChatData { get; set; } = new ObservableCollection<ChatDataModel>();
+
     private PeerInfo selectedPeer = null;
     public PeerInfo SelectedItem { get => selectedPeer; set { selectedPeer = value; OnPropertyChanged(); } }
 
@@ -61,23 +69,79 @@ public class MainWindowViewModel : PropertyNotifyBase
     public double WindowWidth { get => windowWidth; set { windowWidth = value; OnPropertyChanged(); } }
     public double WindowHeight { get => windowHeight; set { windowHeight = value; OnPropertyChanged(); } }
 
+    public bool ShareScreenChecked { get => shareScreenChecked; set { shareScreenChecked = value; HandleShareScreenChecked(value); OnPropertyChanged(); } }
+
+    public bool WindowsActive { get; internal set; }
+
     private ServiceHub services;
     private MainWindowModel model;
+
+    private ChatSerializer chatSerializer;
     internal MainWindowViewModel(ServiceHub services)
     {
         this.services = services;
         CallSelectedCommand = new RelayCommand(HandleCallSelected);
         EndCallCommand = new RelayCommand(HandleEndCallClicked);
-        SendTextCommand = new RelayCommand(HandleSendText);
+        SendTextCommand = new RelayCommand(HandleChatSend);
         model = new MainWindowModel(this,services);
 
+        chatSerializer = new ChatSerializer(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
+        LoadMoreMessages();
+        DispatcherRun(()=> SrollToEndChatWindow?.Invoke());
+        MainWindowEventAggregator.Instance.ClearChatHistoryRequested += ClearChatHistory;
 
     }
+
+    private void ClearChatHistory()
+    {
+        chatSerializer.ClearAllHistory();
+        ChatData.Clear();
+    }
+
+    public bool LoadMoreMessages()
+    {
+        //collection.Insert(0, item);
+        bool succes = chatSerializer.LoadFromEnd(20, out var messages);
+        if (!succes) return succes;
+        foreach (var item in messages)
+        {
+            switch (item.MessageType)
+            {
+                case ChatSerializationData.MsgType.Local:
+                    var chat = WriteLocalChat(item.Message, item.TimeStamp);
+                    chat.Sender = item.Sender;
+                    ChatData.Insert(0, chat);
+                    //SrollToEndChatWindow?.Invoke();
+
+                    break;
+                case ChatSerializationData.MsgType.Remote:
+                    var msg = CreateRemoteChatItem(item.Sender, item.Message);
+                    msg.Time = item.TimeStamp.ToShortTimeString();
+                    msg.Sender= item.Sender;
+                    ChatData.Insert(0, msg);
+
+                    break;
+                case ChatSerializationData.MsgType.Info:
+                    break;
+            }
+        }
+        return succes;
+    }
+
     private void HandleCamChecked(bool value)
     {
-       
         model.HandleCamActivated(value);
+    }
+    private void HandleShareScreenChecked(bool value)
+    {
+        if(value)
+            services.VideoHandler.Pause();
+        else services.VideoHandler.Resume();
 
+        model.HandleShareScreenChecked(value);
+
+        //if (value)
+        //    CameraChecked = false;
     }
 
     private void HandleMicChecked(bool value)
@@ -86,21 +150,80 @@ public class MainWindowViewModel : PropertyNotifyBase
     }
 
 
-    private void HandleSendText(object obj)
+    private void HandleChatSend(object obj)
     {
         DispatcherRun(() =>
         {
+
+            var chatData = WriteLocalChat(ChatInputText, DateTime.Now);
+            chatSerializer.SerializeLocalEntry(ChatInputText, DateTime.Now, chatData.Sender);
             model.HandleUserChatSend(ChatInputText);
-            ChatText += "\n" + "[" + DateTime.Now.ToShortTimeString() + "] " + "You" + " : " + ChatInputText;
+
+
+            ChatData.Add(chatData);
+
             ChatInputText = "";
             SrollToEndChatWindow?.Invoke();
         }); 
     }
 
-    public void WriteChatEntry(string sender,string message)
+    private ChatDataModel WriteLocalChat(string message, DateTime timeStamp)
     {
-        DispatcherRun(() =>
-       ChatText += "\n" + "[" + DateTime.Now.ToShortTimeString() + "] " + sender + " : " + message);
+        ChatDataModel chatData = new ChatDataModel();
+        chatData.CreateLocalChatEntry(message,timeStamp);
+        if (ChatData.Count > 0 && ChatData.Last().Allignment == "Right"
+        && (ChatData.Last().Sender == "You" || ChatData.Last().Sender == null))
+        {
+            chatData.Sender = null;
+        }
+        return chatData;
+    }
+   
+
+   
+
+    //private void WriteInfoChat(string message)
+    //{
+
+    //}
+
+    public void WriteRemoteChat(string sender,string message)
+    {
+        DispatcherRun(() => {
+            if (!WindowsActive)
+            {
+                AsyncToastNotificationHandler.ShowInfoNotification(sender + " sent a message :\n" + message);
+
+            }
+            var chatData = CreateRemoteChatItem(sender, message);
+            chatSerializer.SerializeRemoteEntry(chatData.Sender,message,DateTime.Now);
+            ChatData.Add(chatData);
+            SrollToEndChatWindow?.Invoke();
+
+        });
+
+    }
+    private ChatDataModel CreateRemoteChatItem(string sender, string message)
+    {
+        ChatDataModel chatData = new ChatDataModel();
+
+        chatData.CreateRemoteChatEntry(sender, message);
+        if (ChatData.Count > 0 && ChatData.Last().Allignment == "Left" &&
+        (ChatData.Last().Sender == sender || ChatData.Last().Sender == null))
+        {
+            chatData.Sender = null;
+        }
+        return chatData;
+    }
+    public void WriteInfoEntry(string entry)
+    {
+        DispatcherRun(() => {
+            ChatDataModel chatData = new ChatDataModel();
+            chatData.CreateInfoChatEntry( entry);
+            ChatData.Add(chatData);
+            SrollToEndChatWindow?.Invoke();
+
+        });
     }
 
     private void HandleEndCallClicked(object obj)

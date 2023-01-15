@@ -16,7 +16,8 @@
     <Deterministic>true</Deterministic>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
-    <PublishUrl>publish\</PublishUrl>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>C:\Users\dcano\Desktop\x64\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
@@ -26,10 +27,10 @@
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
-    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationRevision>1</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
+    <PublishWizardCompleted>true</PublishWizardCompleted>
     <BootstrapperEnabled>true</BootstrapperEnabled>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -72,19 +73,34 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>favicon.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\favicon2.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestCertificateThumbprint>FB75839D94FE0B2591767C511B0A7D3FA3CEFB07</ManifestCertificateThumbprint>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestKeyFile>Videocall_TemporaryKey.pfx</ManifestKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateManifests>true</GenerateManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignManifests>true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="NetworkLibrary">
-      <HintPath>..\..\NetworkExperiments\Protobuff\bin\Debug\netstandard2.0\NetworkLibrary.dll</HintPath>
+    <Reference Include="NetworkLibrary, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\NetworkExperiments\Protobuff\bin\Release\netstandard2.0\NetworkLibrary.dll</HintPath>
     </Reference>
-    <Reference Include="Protobuff">
-      <HintPath>..\..\NetworkExperiments\Protobuff\bin\Debug\netstandard2.0\Protobuff.dll</HintPath>
+    <Reference Include="Protobuff, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\NetworkExperiments\Protobuff\bin\Release\netstandard2.0\Protobuff.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Numerics" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Core" />
@@ -103,6 +119,13 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Models\MainWindow\ChatDataModel.cs" />
+    <Compile Include="Models\MainWindow\ChatSerializer.cs" />
+    <Compile Include="Models\MainWindowEventAggregator.cs" />
+    <Compile Include="Services\ScreenShare\ScreenHelper.cs" />
+    <Compile Include="Services\ScreenShare\ScreenShareHandler.cs" />
+    <Compile Include="Services\ScreenShare\SimpleScreenShareHandler.cs" />
+    <Compile Include="Test.cs" />
     <Compile Include="Windows\AlertWindow.xaml.cs">
       <DependentUpon>AlertWindow.xaml</DependentUpon>
     </Compile>
@@ -142,19 +165,11 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Old\MainWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Services\Audio\AudioHandler.cs" />
-    <Compile Include="Old\MainWindow.xaml.cs">
-      <DependentUpon>MainWindow.xaml</DependentUpon>
-      <SubType>Code</SubType>
-    </Compile>
     <Page Include="VideoCallWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -188,6 +203,7 @@
     <None Include="Models\Settings\Settings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Videocall_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -232,6 +248,31 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Resources\m2.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\favicon2.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="favicon2.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="9-95099_camera-icon-png-image-camera-apple-icon-transparent.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\micoff_111072.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\cam off.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\camon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\micon.png" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

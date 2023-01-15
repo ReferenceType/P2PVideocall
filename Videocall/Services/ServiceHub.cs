@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Videocall.Services.Latency;
+using Videocall.Services.ScreenShare;
 
 namespace Videocall
 {
@@ -18,19 +19,22 @@ namespace Videocall
         public FileShare FileShare { get;}
 
         public LatencyPublisher LatencyPublisher { get; }
+        public SimpleScreenShareHandler ScreenShareHandler { get; }
 
 
         public ServiceHub(AudioHandler audioHandlerAudioHandler,
                           VideoHandler videoHandler,
                           MessageHandler messageHandler,
                           FileShare fileSHare,
-                          LatencyPublisher latencyPublisher)
+                          LatencyPublisher latencyPublisher,
+                          SimpleScreenShareHandler screenShareHandler)
         {
             AudioHandler = audioHandlerAudioHandler;
             VideoHandler = videoHandler;
             MessageHandler = messageHandler;
             FileShare = fileSHare;
             LatencyPublisher = latencyPublisher;
+            ScreenShareHandler = screenShareHandler;
 
             messageHandler.OnMessageAvailable += HandleMessage;
 
@@ -40,11 +44,11 @@ namespace Videocall
 
         private void HandleMessage(MessageEnvelope message)
         {
-            if(message.Header == "MicClosed")
+            if(message.Header == MessageHeaders.MicClosed)
             {
                 AudioHandler.FlushBuffers();
             }
-            else if (message.Header == "RemoteClosedCam")
+            else if (message.Header == MessageHeaders.RemoteClosedCam)
             {
                 VideoHandler.FlushBuffers();
             }

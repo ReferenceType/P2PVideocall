@@ -44,7 +44,6 @@ namespace Videocall
         private DateTime LastBatchTimeStamp = DateTime.Now;
         public int BufferLatency;
         private int NumSqBuffered = 0;
-        private int LastSqeNo = 0;
         private AutoResetEvent bufferFullEvent = new AutoResetEvent(false); 
         public int NumLostPackages = 0;
 
@@ -226,7 +225,7 @@ namespace Videocall
             {
                 while (true)
                 {
-                    await Task.Delay(1000);
+                    await Task.Delay(100);
                     OnStatisticsAvailable?.Invoke(GetStatisticalData());
                 }
 
@@ -241,7 +240,7 @@ namespace Videocall
                 BufferedDuration = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds,
                 BufferSize = (int)soundListenBuffer.BufferDuration.TotalMilliseconds,
                 TotalNumDroppedPAckages = collector.NumLostPackages,
-                NumLostPackages = collector.NumLostPackages - lastLostPackckageAmount,
+                NumLostPackages = (collector.NumLostPackages - lastLostPackckageAmount)/10,
 
             };
             lastLostPackckageAmount = collector.NumLostPackages;
@@ -255,7 +254,6 @@ namespace Videocall
 
         private void MicAudioRecieved(object sender, WaveInEventArgs e)
         {
-            
             try
             {
                 var res = Encode(e.Buffer, 0, e.BytesRecorded);

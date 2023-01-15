@@ -52,20 +52,20 @@ namespace Videocall
 
         private void AcceptBtnClicked(object sender, RoutedEventArgs e)
         {
-            userActionResult.TrySetResult(AsyncToastNotificationHandler.CallAccepted);
+            userActionResult?.TrySetResult(AsyncToastNotificationHandler.CallAccepted);
             this.Hide();
         }
 
         private void RejectBtnClicked(object sender, RoutedEventArgs e)
         {
-            userActionResult.TrySetResult(AsyncToastNotificationHandler.CallRejected);
+            userActionResult?.TrySetResult(AsyncToastNotificationHandler.CallRejected);
             this.Hide();
 
         }
 
         public static void CancelDialog()
         {
-            userActionResult.TrySetCanceled();
+            userActionResult?.TrySetCanceled();
             Application.Current.Dispatcher.BeginInvoke(new Action(() => Instance.Hide()));
 
         }

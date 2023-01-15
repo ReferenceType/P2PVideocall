@@ -7,6 +7,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Net;
@@ -15,16 +16,17 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Animation;
 using Videocall;
+using Videocall.Models;
 using Videocall.Services.Latency;
 using Windows.Media.Protection.PlayReady;
 
 
 internal class MainWindowModel
 {
+
     private MainWindowViewModel mainWindowViewModel;
     private ServiceHub services;
     private ConcurrentDictionary<Guid, string> peers = new ConcurrentDictionary<Guid, string>();
-
 
     public MainWindowModel(MainWindowViewModel mainWindowViewModel, ServiceHub services)
     {
@@ -44,6 +46,8 @@ internal class MainWindowModel
         CallStateManager.StaticPropertyChanged += CallStateChanged;
     }
 
+
+
     private void LatencyDataAvailable(object sender, LatencyEventArgs e)
     {
         foreach (var item in e.UdpLatency)
@@ -57,13 +61,13 @@ internal class MainWindowModel
             var info = mainWindowViewModel.PeerInfos.Where(x => x.Guid == item.Key).FirstOrDefault();
             if (info != null) info.TcpLatency = item.Value;
         }
-      
+
     }
 
     private void CallStateChanged(object sender, PropertyChangedEventArgs e)
     {
         var currentstate = CallStateManager.GetState();
-        if(currentstate == CallStateManager.CallState.OnCall ||currentstate == CallStateManager.CallState.Calling)
+        if (currentstate == CallStateManager.CallState.OnCall || currentstate == CallStateManager.CallState.Calling)
         {
             //mainWindowViewModel.CanvasColumn
             DispatcherRun(() =>
@@ -73,13 +77,6 @@ internal class MainWindowModel
                 mainWindowViewModel.EndCallVisibility = true;
                 if (mainWindowViewModel.WindowWidth <= 1000)
                     mainWindowViewModel.WindowWidth = 1000;
-
-                mainWindowViewModel.ChatColumn = 280;
-                mainWindowViewModel.CanvasColumn = -1;
-                mainWindowViewModel.ChatColumn = 280;
-                mainWindowViewModel.CanvasColumn = -1;
-
-              
             });
         }
         else
@@ -88,12 +85,9 @@ internal class MainWindowModel
             DispatcherRun(() =>
             {
                 mainWindowViewModel.EndCallVisibility = false;
-                mainWindowViewModel.SecondaryCanvasSource= null;
-                mainWindowViewModel.PrimaryCanvasSource= null;
-                mainWindowViewModel.CanvasColumn = 2;
-                mainWindowViewModel.ChatColumn = -1;
-                mainWindowViewModel.CanvasColumn = 2;
-                mainWindowViewModel.ChatColumn = -1;
+                mainWindowViewModel.SecondaryCanvasSource = null;
+                mainWindowViewModel.PrimaryCanvasSource = null;
+              
             });
 
             DispatcherRun(async () => {
@@ -101,49 +95,62 @@ internal class MainWindowModel
                 mainWindowViewModel.SecondaryCanvasSource = null;
                 mainWindowViewModel.PrimaryCanvasSource = null;
             });
-            
+
         }
     }
 
     #region Message handling
     private void HandleMessage(MessageEnvelope message)
     {
+        if (message.Header == MessageHeaders.FileTransfer)
+        {
+            //message.LockBytes();
+            HandleFile(message);
+            return;
+        }
+        message.LockBytes();
         switch (message.Header)
         {
-            case "Who":
+            case MessageHeaders.Identify:
                 SendId(message);
                 break;
-            case "AudioSample":
+            case MessageHeaders.AudioSample:
                 HandleIncomingSound(message);
                 break;
-            case "ImageMessage":
+            case MessageHeaders.ImageMessage:
                 HandleIncomingImage(message);
                 break;
-            case "Text":
+            case MessageHeaders.Text:
                 HandleText(message);
                 break;
-            case "FileDirectoryStructure":
+            case MessageHeaders.FileDirectoryStructure:
                 HandleFile(message);
                 break;
-            case "FileTransfer":
+            case "FTComplete":
                 HandleFile(message);
                 break;
-            case "Call":
+            //case MessageHeaders.FileTransfer:
+            //    HandleFile(message);
+            //break;
+            case MessageHeaders.Call:
                 HandleRemoteCallRequest(message);
                 break;
-            case "EndCall":
+            case MessageHeaders.EndCall:
                 HandleRemoteEndCall(message);
                 break;
-            case "RemoteClosedCam":
+            case MessageHeaders.RemoteClosedCam:
                 HandleRemoteCamClosed(message);
+                break;
+
+            case MessageHeaders.VideoAck:
+                HandleVideoAck(message);
                 break;
         }
     }
 
-    private void HandleRemoteCamClosed(MessageEnvelope message)
-    {
-        DispatcherRun(async () => { await Task.Delay(500); mainWindowViewModel.PrimaryCanvasSource = null; }); 
-    }
+
+
+
     #endregion
 
     #region Registery
@@ -172,7 +179,7 @@ internal class MainWindowModel
                 while (services.MessageHandler.registeredPeers.Contains(peerId))
                 {
                     MessageEnvelope env = new MessageEnvelope();
-                    env.Header = "Who";
+                    env.Header = MessageHeaders.Identify;
                     var response = await services.MessageHandler.client.SendRequestAndWaitResponse(peerId, env, 10000);
                     if (response.Header != MessageEnvelope.RequestTimeout)
                     {
@@ -182,7 +189,7 @@ internal class MainWindowModel
                             return;
                         }
 
-                            string name = response.KeyValuePairs[peerId.ToString()];
+                        string name = response.KeyValuePairs[peerId.ToString()];
                         peers.TryAdd(peerId, name);
                         var info = services.MessageHandler.client.GetPeerInfo(peerId);
                         info.IP = IPAddress.Parse(info.IP).MapToIPv4().ToString();
@@ -201,7 +208,7 @@ internal class MainWindowModel
                         DebugLogWindow.AppendLog("Error", "Registery timeout");
                     }
                 }
-               
+
             }
             catch (Exception ex)
             {
@@ -223,7 +230,7 @@ internal class MainWindowModel
             response.Header = "ID";
             response.KeyValuePairs = new Dictionary<string, string>
                 {
-                    { services.MessageHandler.client.sessionId.ToString(), SettingConfig.instance.Name }
+                    { services.MessageHandler.client.sessionId.ToString(), SettingConfig.Instance.Name }
                 };
             services.MessageHandler.client.SendAsyncMessage(message.From, response);
         });
@@ -236,26 +243,73 @@ internal class MainWindowModel
         FileDirectoryStructure tree = services.FileShare.CreateDirectoryTree(files[0]);
 
         services.MessageHandler.client.SendAsyncMessage(selectedPeer, tree);
-
-        List<FileTransfer> fileDatas = services.FileShare.GetFiles(tree);
+        Stopwatch sw = new Stopwatch();
+        List<FileTransfer> fileDatas = services.FileShare.GetFiles(tree, chunkSize: int.Parse(SettingConfig.Instance.ChunkSize));
         Task.Run(async () =>
         {
+            sw.Start();
+
             try
             {
-                foreach (var item in fileDatas)
+                Task prev = null;
+                FileTransfer prevTaskData = null;
+
+                for (int i = 0; i < fileDatas.Count; i++)
                 {
-                    DispatcherRun(() => mainWindowViewModel.FTProgressText = "Sending file: " + item.FilePath);
-                    await services.MessageHandler.client.SendRequestAndWaitResponse(selectedPeer, item, null, Math.Min(10000,item.Data.Length/100));
-                    mainWindowViewModel.WriteChatEntry("Info", "Sent file: " + item.FilePath);
+                    var fileData = fileDatas[i];
+                    DispatcherRun(() => mainWindowViewModel.FTProgressText =
+                    "%" + (100 * ((float)fileData.SequenceNumber / (float)(1 + fileData.TotalSequences))).ToString("N1") + " Sending file: " + fileData.FilePath);
+
+                    fileData.ReadBytes();
+                    var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
+
+                    var res = services.MessageHandler.client.SendRequestAndWaitResponse(selectedPeer,
+                          envelope,
+                          chunkBuffer,
+                          0,
+                          fileData.count,
+                          timeoutMs: Math.Max(10000, fileData.count / 100));
+                    res.GetAwaiter().OnCompleted(() => fileData?.Release());
+
+
+                    if (prev != null)
+                    {
+                        await prev;
+                        prev = null;
+                    }
+                    else 
+                    {
+                        prev = res;
+                    }
+                   
+                    if (fileData.IsLast)
+                    {
+                       // mainWindowViewModel.WriteInfoEntry("Sent file: " + fileData.FilePath + " in " + sw.Elapsed.ToString());
+                        //sw.Restart();
+                    }
 
                 }
                 DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                DebugLogWindow.AppendLog("Error", "Filetransvfver drag drop encountered an error: " + ex.Message);
+                DebugLogWindow.AppendLog("Error", "Filetransfer drag drop encountered an error: " + ex.Message);
             }
-            
+            string name = "";
+            var firstFolder = tree.FileStructure.Keys.First();
+            if (!string.IsNullOrEmpty(firstFolder))
+            {
+                name += firstFolder;
+            }
+            else
+                name += tree.FileStructure.Values.First().First();
+
+             mainWindowViewModel.WriteInfoEntry("Transfer Complete: " + tree.seed+name + " in " + sw.Elapsed.ToString());
+
+            var response = new MessageEnvelope();
+            response.Header = "FTComplete";
+            response.KeyValuePairs = new Dictionary<string, string>() { { name, null } };
+            services.MessageHandler.client.SendAsyncMessage(selectedPeer, response);
 
 
         });
@@ -263,26 +317,38 @@ internal class MainWindowModel
 
     private void HandleFile(MessageEnvelope message)
     {
-        if (message.Header == "FileTransfer")
+        if (message.Header == MessageHeaders.FileTransfer)
         {
-            var fileMsg = services.FileShare.HandleFileTransferMessage(message);
-            DispatcherRun(() => { mainWindowViewModel.FTProgressText = string.Format("");});
-            mainWindowViewModel.WriteChatEntry("You", "received a file " + fileMsg.FilePath);
-
-
             var response = new MessageEnvelope();
             response.MessageId = message.MessageId;
             response.Header = "FileAck";
 
             services.MessageHandler.client.SendAsyncMessage(message.From, response);
+            var fileMsg = services.FileShare.HandleFileTransferMessage(message);
 
+            DispatcherRun(() => {
+                mainWindowViewModel.FTProgressText =
+                "%" + (100 * ((float)fileMsg.SequenceNumber / (float)(1 + fileMsg.TotalSequences))).ToString("N1") + "Receiving file" + fileMsg.FilePath;
+            });
+
+            if (fileMsg.IsLast)
+            {
+               // mainWindowViewModel.WriteInfoEntry("Received a file " + fileMsg.FilePath);
+                DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
+            }
         }
-        else
+        else if(message.Header == MessageHeaders.FileDirectoryStructure)
         {
 
             var fileTree = services.FileShare.HandleDirectoryStructure(message);
             int howManyFiles = fileTree.FileStructure.Values.Select(x => x.Count).Sum();
             DispatcherRun(() => mainWindowViewModel.FTProgressText = string.Format("Incoming {0} files", howManyFiles));
+        }
+        else
+        {
+            mainWindowViewModel.WriteInfoEntry("Receive Complete " +
+                Environment.GetFolderPath(Environment.SpecialFolder.Desktop) +@"\Shared"+ message.KeyValuePairs.Keys.First());
+            DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
         }
     }
     #endregion
@@ -292,7 +358,7 @@ internal class MainWindowModel
     {
         foreach (var item in message.KeyValuePairs)
         {
-             mainWindowViewModel.WriteChatEntry(item.Key, item.Value);
+            mainWindowViewModel.WriteRemoteChat(item.Key, item.Value);
         }
     }
     internal void HandleUserChatSend(string chatInputText)
@@ -301,7 +367,7 @@ internal class MainWindowModel
         MessageEnvelope msg = new MessageEnvelope();
         msg.KeyValuePairs = new Dictionary<string, string>();
         msg.KeyValuePairs[SettingConfig.instance.Name] = textToSend;
-        msg.Header = "Text";
+        msg.Header = MessageHeaders.Text;
 
         if (mainWindowViewModel.SelectedItem != null)
         {
@@ -328,19 +394,19 @@ internal class MainWindowModel
         }
         else
         {
-            if(currentstate == CallStateManager.CallState.OnCall)
+            if (currentstate == CallStateManager.CallState.OnCall)
             {
                 MessageEnvelope msg = new MessageEnvelope();
-                msg.Header = "RemoteClosedCam";
+                msg.Header = MessageHeaders.RemoteClosedCam;
                 services.MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), msg);
             }
-          
 
-            DispatcherRun(async () => { await Task.Delay(500); mainWindowViewModel.SecondaryCanvasSource = null;});
+
+            DispatcherRun(async () => { await Task.Delay(500); mainWindowViewModel.SecondaryCanvasSource = null; });
             services.VideoHandler.CloseCamera();
         }
-        
-        
+
+
     }
 
     private void HandleCameraImage(byte[] imageBytes, Mat arg2)
@@ -351,27 +417,45 @@ internal class MainWindowModel
         if (CallStateManager.GetState() == CallStateManager.CallState.OnCall &&
             mainWindowViewModel.CameraChecked)
         {
-            ImageMessage im = new ImageMessage()
-            {
-                Frame = imageBytes,
-                TimeStamp = DateTime.Now
-            };
 
-            services.MessageHandler.SendMessage(CallStateManager.GetCallerId(), im);
+            MessageEnvelope env = new MessageEnvelope();
+            env.TimeStamp = DateTime.Now;
+            env.Payload = imageBytes;
+            env.Header = MessageHeaders.ImageMessage;
+            env.MessageId = Guid.NewGuid();
+            services.VideoHandler.ImageDispatched(env.MessageId, env.TimeStamp);
+            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env);
         }
     }
     private void HandleIncomingImage(MessageEnvelope message)
     {
-        var img = services.MessageHandler.Serializer.UnpackEnvelopedMessage<ImageMessage>(message);
-        services.VideoHandler.HandleIncomingImage(img);
+        var img = message.Payload;
+        services.VideoHandler.HandleIncomingImage(message.TimeStamp, img);
+
+        // ack + ts pong
+        MessageEnvelope env = new MessageEnvelope();
+        env.Header = MessageHeaders.VideoAck;
+        env.MessageId = message.MessageId;
+        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env);
+
         // video handler will invoke image ready event after some buffering
-        // down there
+        // down there HandleNetworkFrame(Mat)
     }
-    private void HandleNetworkFrame(Mat obj)
+    private void HandleNetworkFrame(Mat image)
     {
         DispatcherRun(() =>
-            mainWindowViewModel.PrimaryCanvasSource = obj.ToBitmapSource());
+            mainWindowViewModel.PrimaryCanvasSource = image.ToBitmapSource());
+
     }
+    private void HandleVideoAck(MessageEnvelope message)
+    {
+        services.VideoHandler.HandleAck(message);
+    }
+    private void HandleRemoteCamClosed(MessageEnvelope message)
+    {
+        DispatcherRun(async () => { await Task.Delay(1000); mainWindowViewModel.PrimaryCanvasSource = null; });
+    }
+
     #endregion
 
     #region Sound
@@ -379,7 +463,7 @@ internal class MainWindowModel
     {
         if (CallStateManager.GetState() == CallStateManager.CallState.OnCall &&
             mainWindowViewModel.MicroponeChecked)
-            services.MessageHandler.SendMessage(CallStateManager.GetCallerId(), obj);
+            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), obj);
 
     }
 
@@ -390,8 +474,8 @@ internal class MainWindowModel
     }
     internal void HandleMicChecked(bool value)
     {
-        if(CallStateManager.GetState()== CallStateManager.CallState.OnCall)
-            services.MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(),new MessageEnvelope() { Header = "MicClosed" });
+        if (CallStateManager.GetState() == CallStateManager.CallState.OnCall)
+            services.MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), new MessageEnvelope() { Header = MessageHeaders.MicClosed });
     }
 
     #endregion
@@ -407,7 +491,7 @@ internal class MainWindowModel
             if (info != null)
             {
                 CallStateManager.Calling();
-                var response = await services.MessageHandler.client.SendRequestAndWaitResponse(info.Guid, info, "Call", 10000);
+                var response = await services.MessageHandler.client.SendRequestAndWaitResponse(info.Guid, info, MessageHeaders.Call, 10000);
                 if (response.Header != MessageEnvelope.RequestTimeout)
                     HandleCallResponse(response, info);
                 else
@@ -416,13 +500,13 @@ internal class MainWindowModel
                 }
             }
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             DebugLogWindow.AppendLog("Error", "UserCall Request encountered an error: " + ex.Message);
         }
-       
+
     }
-    
+
     private async void HandleRemoteCallRequest(MessageEnvelope message)
     {
         DebugLogWindow.AppendLog("Info", "GotCallRequest");
@@ -432,11 +516,18 @@ internal class MainWindowModel
 
         try
         {
+            App.ShowMainWindow();
+
             var info = services.MessageHandler.Serializer.UnpackEnvelopedMessage<PeerInfo>(message);
-            var t1 = AsyncToastNotificationHandler.ShowCallNotification(info.Name);
+            //var t1 = AsyncToastNotificationHandler.ShowCallNotification(info.Name);
             var t2 = AlertWindow.ShowCallDialog(info.Name);
 
-            var result = await Task.WhenAny(t1, t2).Result;
+            var res = await Task.WhenAny(/*t1,*/ t2);
+            var result = res.Result;
+            if (result == AsyncToastNotificationHandler.NotificationTimeout)
+            {
+                AsyncToastNotificationHandler.ShowInfoNotification(info.Name + " Called you.");
+            }
 
             message.Header = "CallResponse";
             message.KeyValuePairs = new Dictionary<string, string>
@@ -458,7 +549,7 @@ internal class MainWindowModel
             DebugLogWindow.AppendLog("Error", "REmote call request handler encounterred an error: " + ex.Message);
         }
 
-       
+
 
     }
     private void HandleCallResponse(MessageEnvelope message, PeerInfo info)
@@ -493,7 +584,7 @@ internal class MainWindowModel
             CallStateManager.EndCall();
 
             MessageEnvelope msg = new MessageEnvelope();
-            msg.Header = "EndCall";
+            msg.Header = MessageHeaders.EndCall;
             services.MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), msg);
         }
     }
@@ -517,7 +608,18 @@ internal class MainWindowModel
         }
     }
 
-  
+    internal void HandleShareScreenChecked(bool value)
+    {
+        if (value)
+            services.ScreenShareHandler.StartCapture();
+        else
+        {
+            services.ScreenShareHandler.StopCapture();
+
+            MessageEnvelope msg = new MessageEnvelope();
+            msg.Header = MessageHeaders.RemoteClosedCam;
+            services.MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), msg);
+        }
+
+    }
 }
-
-

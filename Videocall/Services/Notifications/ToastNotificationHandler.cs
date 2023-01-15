@@ -14,7 +14,6 @@ namespace Videocall
         public const string NotificationTimeout = "timeout";
 
         private static ConcurrentDictionary<string, TaskCompletionSource<string>> awaitingTasks = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
-        public static MainWindow w;
         static AsyncToastNotificationHandler()
         {
             ToastNotificationManagerCompat.OnActivated += toastArgs =>
@@ -57,6 +56,7 @@ namespace Videocall
         //action=accept;notificationId=60cc3e4f-500c-42fc-8e88-ca8279c7d3cf
         private static void HandleUserInput(ToastNotificationActivatedEventArgsCompat toastArgs)
         {
+            App.ShowMainWindow();
             Console.WriteLine("input");
             //w.WtireTextOnChatWindow("got input");
 

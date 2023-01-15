@@ -8,15 +8,37 @@
         WindowStyle="None"
         MouseDown="Window_MouseDown"
         ResizeMode="CanResize"
-        
+        IsVisibleChanged="Window_IsVisibleChanged"
         Loaded="Window_Loaded"
         MouseDoubleClick="Window_MouseDoubleClick"
         StateChanged="Window_StateChanged"
-        Title="CameraWindow" Height="216" Width="284.444444444444" Topmost="True" Background="Black" AllowsTransparency="True" BorderBrush="Black">
+        Title="CameraWindow" Height="213" Width="284.444444444444" Topmost="True" Background="Black" AllowsTransparency="True" BorderBrush="Black">
 
     <Grid>
         <Image x:Name="Canvas" HorizontalAlignment="Center" Height="auto" VerticalAlignment="Top" Width="auto" Source="{Binding PrimaryCanvasSource}"/>
         <Button Content="X" HorizontalAlignment="Right" VerticalAlignment="Top" Height="19" Width="18" Background="IndianRed" Click="CloseWindowBtnClick" Margin="0,5,5,0" WindowChrome.IsHitTestVisibleInChrome="True" />
+        <!--<ToggleButton x:Name="CamToggle" Style="{StaticResource MicToggle}"  HorizontalAlignment="Right" VerticalAlignment="Top" Height="19" Width="40" Background="IndianRed" 
+                      IsChecked="{Binding MicroponeChecked,Mode=TwoWay}" Margin="0,5,80,0" WindowChrome.IsHitTestVisibleInChrome="True" />
+        <ToggleButton x:Name="MicToggle" Style="{StaticResource CameraToggle}"  HorizontalAlignment="Right" VerticalAlignment="Top" Height="19" Width="40" Background="IndianRed" 
+                      IsChecked="{Binding CameraChecked,Mode=TwoWay}" Margin="0,5,35,0" WindowChrome.IsHitTestVisibleInChrome="True" />-->
+        <ToggleButton x:Name="MicToggle" Style="{StaticResource ToggleSwitchStyleMic}"  HorizontalAlignment="Right" VerticalAlignment="Top" Height="19" Width="40" Background="IndianRed" 
+                      Margin="0,5,73,0" WindowChrome.IsHitTestVisibleInChrome="True"
+                      IsChecked="{Binding MicroponeChecked,Mode=TwoWay}"
+                      FontSize="5" 
+                        />
+        <ToggleButton x:Name="CamToggle" Style="{StaticResource ToggleSwitchStyleCam}"  HorizontalAlignment="Right" VerticalAlignment="Top" Height="19" Width="40" Background="IndianRed" 
+                      Margin="0,5,28,0" WindowChrome.IsHitTestVisibleInChrome="True" 
+                      IsChecked="{Binding CameraChecked,Mode=TwoWay}"/>
+
+        <!--<CheckBox Content=" Mic"  HorizontalAlignment="Left" Margin="174,7,0,0" VerticalAlignment="Top"
+                     IsChecked="{Binding MicroponeChecked,Mode=TwoWay}" WindowChrome.IsHitTestVisibleInChrome="True"/>
+        -->
+        <!--<Image Margin="145,3,111,189" Source="Resources/m2.png"/>-->
+        <!--
+        <CheckBox Content="Cam" HorizontalAlignment="Left" Margin="221,7,0,0" VerticalAlignment="Top"
+                     IsChecked="{Binding CameraChecked,Mode=TwoWay}" WindowChrome.IsHitTestVisibleInChrome="True"/>-->
+
+
 
     </Grid>
 

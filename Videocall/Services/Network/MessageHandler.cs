@@ -10,8 +10,24 @@ using System.Threading.Tasks;
 
 namespace Videocall
 {
+    public class MessageHeaders
+    {
+        public const string Identify = "Who";
+        public const string AudioSample = "AudioSample";
+        public const string ImageMessage = "ImageMessage";
+        public const string Text = "Text";
+        public const string FileDirectoryStructure = "FileDirectoryStructure";
+        public const string FileTransfer = "FileTransfer";
+        public const string Call = "Call";
+        public const string EndCall = "EndCall";
+        public const string RemoteClosedCam = "RemoteClosedCam";
+        public const string VideoAck = "VideoAck";
+        public const string MicClosed = "MicClosed";
+    }
     internal class MessageHandler
     {
+       
+
         public RelayClient client;
         public HashSet<Guid> registeredPeers = new HashSet<Guid>();
         public Action<MessageEnvelope> OnMessageAvailable;
@@ -61,7 +77,15 @@ namespace Videocall
           
         }
 
-       internal void SendMessage<T>(Guid id, T message) where T : IProtoMessage
+       internal void SendStreamMessage<T>(Guid id, T message) where T : IProtoMessage
+        {
+            if (TransportLayer == "Udp")
+                client.SendUdpMesssage(id, message);
+
+            else
+                client.SendAsyncMessage(id, message);
+        }
+        internal void SendStreamMessage(Guid id, MessageEnvelope message) 
         {
             if (TransportLayer == "Udp")
                 client.SendUdpMesssage(id, message);
@@ -70,6 +94,6 @@ namespace Videocall
                 client.SendAsyncMessage(id, message);
         }
 
-       
+
     }
 }

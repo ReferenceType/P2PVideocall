@@ -15,6 +15,7 @@ namespace Videocall
         private string ip;
         private string port;
         private string name;
+        private string chunkSize = "1000000";
         private static bool dontInvoke = true;
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -35,6 +36,7 @@ namespace Videocall
         public string Port { get => port; set { port = value; OnPropertyChanged(); } }
 
         public string Name { get => name; set { name = value; OnPropertyChanged(); } }
+        public string ChunkSize { get => chunkSize; set { chunkSize = value; OnPropertyChanged(); } }
 
         public static void SerializeToJsonAndSave()
         {

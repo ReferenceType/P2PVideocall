@@ -1,8 +1,10 @@
 ﻿using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using ProtoBuf;
+using Protobuff;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,22 +22,37 @@ namespace Videocall
     }
     internal class VideoHandler
     {
-        private VideoCapture capture;
+
         public Action<byte[],Mat> OnCameraImageAvailable;
         public Action<Mat> OnNetworkFrameAvailable;
+        public Action<int> QualityAutoAdjusted;
+        public Action<float> SendRatePublished;
+        public Action<double> AverageLatencyPublished;
 
         public int captureRateMs = 50;
-        public int compressionLevel = 83;
-
-        private bool captureRunning = false;
-        private ConcurrentDictionary<DateTime,Mat> frameQueue = new ConcurrentDictionary<DateTime, Mat>();
-        private AutoResetEvent imgReady = new AutoResetEvent(false);
-        private DateTime lastProcessedTimestamp = DateTime.Now;
-        private int frameCount;
-        private int frameRate = 0;
+        public int CompressionLevel = 83;
+        private int compressionLevel_ = 83;
 
         public int VideoLatency { get; internal set; } = 200;
         public int AudioBufferLatency { get; internal set; } = 0;
+        public double AverageLatency { get; private set; } = -1;
+
+        private VideoCapture capture;
+
+        private readonly ConcurrentDictionary<DateTime,Mat> frameQueue = new ConcurrentDictionary<DateTime, Mat>();
+        private readonly AutoResetEvent imgReady = new AutoResetEvent(false);
+        private DateTime lastProcessedTimestamp = DateTime.Now;
+
+        private int frameCount;
+        private int frameRate = 0;
+        private int bytesSent = 0;
+
+        private long avgDivider = 2;
+        private readonly ConcurrentDictionary<Guid,DateTime> timeDict = new ConcurrentDictionary<Guid,DateTime>();   
+
+        private bool paused= false;
+        private bool captureRunning = false;
+
 
         public VideoHandler()
         {
@@ -46,6 +63,8 @@ namespace Videocall
                     await Task.Delay(1000);
                     int count = Interlocked.Exchange(ref frameCount, 0);
                     frameRate = Math.Max(count,1);
+                    SendRatePublished?.Invoke((float)bytesSent / 1000);
+                    bytesSent= 0;
                 }
                
             });
@@ -111,38 +130,34 @@ namespace Videocall
                 {
                     while (capture!= null && capture.IsOpened())
                     {
+                        Thread.Sleep(Math.Max(0, captureRateMs - 16));
+                        if (paused)
+                            continue;
+
                         capture.Read(frame);
-                        //ImwriteFlags
-                        var param = new int[7];
-                        param[0] = 1;
-                        param[1] = compressionLevel;
-                        param[2] = 2;
-                        param[3] = 0;
-                        param[4] = 3;
-
-
                         ImageEncodingParam[] par= new ImageEncodingParam[1];
-                        //par[0] = new ImageEncodingParam(ImwriteFlags.JpegProgressive, 1);
-                        //par[1] = new ImageEncodingParam(ImwriteFlags.JpegQuality, compressionLevel);
-                        par[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, compressionLevel);
-                        //par[1] = new ImageEncodingParam(ImwriteFlags.JpegQuality, compressionLevel);
-
+                        par[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(10,95, compressionLevel_));
+                      
                         byte[] imageBytes;
                         try
                         {
                             imageBytes = frame.ImEncode(ext: ".webp", par);
-                            int a = imageBytes.Length;
-                            Console.WriteLine(a);
                             //imageBytes = frame.ImEncode(ext: ".jpg", param);
-                            int b = imageBytes.Length;
-                            Console.WriteLine(b);
+                            int imageByteSize = imageBytes.Length;
+                            bytesSent += imageByteSize;
 
+                            if (imageByteSize > 60000)
+                            {
+                                compressionLevel_ -= 20;
+                                QualityAutoAdjusted?.Invoke(compressionLevel_);
+
+                                continue;
+                            }
 
                             OnCameraImageAvailable?.Invoke(imageBytes,frame);
                         }
                         catch { break; }
 
-                        Thread.Sleep(Math.Max(0,captureRateMs-16));
                     }
                 }
                 finally
@@ -156,11 +171,17 @@ namespace Videocall
            
 
         }
-
-        internal void HandleIncomingImage(ImageMessage payload)
+        private int Clamp(int low, int high, int val)
         {
-            Mat img = Cv2.ImDecode(payload.Frame, ImreadModes.Unchanged);
-            frameQueue[payload.TimeStamp] = img;
+            if (val > high) return high;
+            else if (val < low) return low;
+            return val;
+        }
+
+        internal void HandleIncomingImage(DateTime timeStamp,byte[] payload)
+        {
+            Mat img = Cv2.ImDecode(payload, ImreadModes.Unchanged);
+            frameQueue[timeStamp] = img;
             imgReady.Set();
             Interlocked.Increment(ref frameCount);
         }
@@ -168,6 +189,86 @@ namespace Videocall
         internal void FlushBuffers()
         {
             frameQueue.Clear();
+            AverageLatency= -1;
+            avgDivider = 2;
+            timeDict.Clear();
+        }
+
+        internal void Pause() =>paused= true;
+        internal void Resume() =>paused= false;
+
+        internal void HandleAck(MessageEnvelope message)
+        {
+            double currentLatency = 0;
+            if (timeDict.TryRemove(message.MessageId, out var timeStamp))
+            {
+                 currentLatency = (DateTime.Now - timeStamp).TotalMilliseconds;
+            }
+            else
+                return;
+
+            //Console.WriteLine("Current Latency: " + currentLatency.ToString("N5") + "Avg: " + AverageLatency.ToString("N5"));
+            if (AverageLatency == -1)
+            {
+                AverageLatency = currentLatency;
+            }
+
+            if (currentLatency <= AverageLatency)
+                BumpQuality();
+            else
+                RecuceQuality();
+
+            AverageLatency = (avgDivider * AverageLatency + currentLatency) / (avgDivider+1);
+            avgDivider++;
+
+            AverageLatencyPublished?.Invoke(AverageLatency);
+            // check for lost packets
+            if (timeDict.Count>0)
+            {
+                foreach (var item in timeDict)
+                {
+                    List<Guid> toRemove = new List<Guid>();
+                    if((DateTime.Now - item.Value).TotalMilliseconds>AverageLatency*2)
+                    {
+                        // lost package , we need to remove it and reduce quality after
+                        toRemove.Add(item.Key);
+                    }
+                    foreach (var key in toRemove)
+                    {
+                        timeDict.TryRemove(key, out _);
+                        RecuceQuality(10);
+                    }
+                }
+
+            }
+
+        }
+
+        private void RecuceQuality(int reduction = 5)
+        {
+            int old = compressionLevel_;
+            int compressionTarget = compressionLevel_ - reduction;
+            compressionLevel_ = Math.Max(10, compressionTarget);
+
+            if (old != compressionLevel_)
+                QualityAutoAdjusted?.Invoke(compressionLevel_);
+        }
+
+        private void BumpQuality()
+        {
+            int old = compressionLevel_;
+            var compressionTarget = compressionLevel_ + 5;
+            compressionLevel_ = Math.Min(CompressionLevel, compressionTarget);
+
+            if (old != compressionLevel_)
+                QualityAutoAdjusted?.Invoke(compressionLevel_);
+
+        }
+
+        // when we dispatrch imageto remote, we need to timestamp it and compare on acks arrival
+        internal void ImageDispatched(Guid messageId, DateTime timeStamp)
+        {
+            timeDict.TryAdd(messageId, timeStamp);
         }
     }
 }
