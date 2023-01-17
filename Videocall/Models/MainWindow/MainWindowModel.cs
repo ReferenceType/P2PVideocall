@@ -87,7 +87,7 @@ internal class MainWindowModel
                 mainWindowViewModel.EndCallVisibility = false;
                 mainWindowViewModel.SecondaryCanvasSource = null;
                 mainWindowViewModel.PrimaryCanvasSource = null;
-              
+
             });
 
             DispatcherRun(async () => {
@@ -145,6 +145,8 @@ internal class MainWindowModel
             case MessageHeaders.VideoAck:
                 HandleVideoAck(message);
                 break;
+
+
         }
     }
 
@@ -240,20 +242,23 @@ internal class MainWindowModel
     #region File Transfer
     internal void HandleFileDrop(string[] files, Guid selectedPeer)
     {
-        FileDirectoryStructure tree = services.FileShare.CreateDirectoryTree(files[0]);
-
-        services.MessageHandler.client.SendAsyncMessage(selectedPeer, tree);
-        Stopwatch sw = new Stopwatch();
-        List<FileTransfer> fileDatas = services.FileShare.GetFiles(tree, chunkSize: int.Parse(SettingConfig.Instance.ChunkSize));
         Task.Run(async () =>
         {
-            sw.Start();
 
+            FileDirectoryStructure tree = services.FileShare.CreateDirectoryTree(files[0]);
+            services.MessageHandler.client.SendAsyncMessage(selectedPeer, tree);
+            Stopwatch sw = new Stopwatch();
+
+            DispatcherRun(() => mainWindowViewModel.FTProgressText = "Computing Hash..");
+            List<FileTransfer> fileDatas = services.FileShare.GetFiles(tree, chunkSize: int.Parse(SettingConfig.Instance.ChunkSize));
+
+            sw.Start();
             try
             {
-                Task prev = null;
-                FileTransfer prevTaskData = null;
 
+                Task prev = null;
+                int windoowSize = Math.Max(1, (int)(20000000 / int.Parse(SettingConfig.Instance.ChunkSize)));
+                int currentWindow = 0;
                 for (int i = 0; i < fileDatas.Count; i++)
                 {
                     var fileData = fileDatas[i];
@@ -271,22 +276,20 @@ internal class MainWindowModel
                           timeoutMs: Math.Max(10000, fileData.count / 100));
                     res.GetAwaiter().OnCompleted(() => fileData?.Release());
 
-
-                    if (prev != null)
-                    {
-                        await prev;
-                        prev = null;
-                    }
-                    else 
+                    if (currentWindow == 0)
                     {
                         prev = res;
                     }
-                   
-                    if (fileData.IsLast)
+                    if (prev != null && currentWindow == windoowSize)
                     {
-                       // mainWindowViewModel.WriteInfoEntry("Sent file: " + fileData.FilePath + " in " + sw.Elapsed.ToString());
-                        //sw.Restart();
+                        currentWindow = 0;
+                        await prev;
+                        prev = null;
                     }
+                    else
+                        currentWindow++;
+
+
 
                 }
                 DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
@@ -295,6 +298,7 @@ internal class MainWindowModel
             {
                 DebugLogWindow.AppendLog("Error", "Filetransfer drag drop encountered an error: " + ex.Message);
             }
+
             string name = "";
             var firstFolder = tree.FileStructure.Keys.First();
             if (!string.IsNullOrEmpty(firstFolder))
@@ -304,7 +308,7 @@ internal class MainWindowModel
             else
                 name += tree.FileStructure.Values.First().First();
 
-             mainWindowViewModel.WriteInfoEntry("Transfer Complete: " + tree.seed+name + " in " + sw.Elapsed.ToString());
+            mainWindowViewModel.WriteInfoEntry("Transfer Complete: " + tree.seed + name + " in " + sw.Elapsed.ToString());
 
             var response = new MessageEnvelope();
             response.Header = "FTComplete";
@@ -331,13 +335,9 @@ internal class MainWindowModel
                 "%" + (100 * ((float)fileMsg.SequenceNumber / (float)(1 + fileMsg.TotalSequences))).ToString("N1") + "Receiving file" + fileMsg.FilePath;
             });
 
-            if (fileMsg.IsLast)
-            {
-               // mainWindowViewModel.WriteInfoEntry("Received a file " + fileMsg.FilePath);
-                DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
-            }
+
         }
-        else if(message.Header == MessageHeaders.FileDirectoryStructure)
+        else if (message.Header == MessageHeaders.FileDirectoryStructure)
         {
 
             var fileTree = services.FileShare.HandleDirectoryStructure(message);
@@ -347,7 +347,7 @@ internal class MainWindowModel
         else
         {
             mainWindowViewModel.WriteInfoEntry("Receive Complete " +
-                Environment.GetFolderPath(Environment.SpecialFolder.Desktop) +@"\Shared"+ message.KeyValuePairs.Keys.First());
+                Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + @"\Shared" + message.KeyValuePairs.Keys.First());
             DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
         }
     }

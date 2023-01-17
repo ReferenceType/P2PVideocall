@@ -7,12 +7,15 @@ using System.Collections.Generic;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Videocall
 {
     [ProtoContract]
-    public class FileDirectoryStructure: IProtoMessage
+    public class FileDirectoryStructure : IProtoMessage
     {
         internal string seed;
         [ProtoMember(1)]
@@ -27,12 +30,13 @@ namespace Videocall
         public int SequenceNumber;
         public int TotalSequences;
 
-        public bool IsLast => SequenceNumber == TotalSequences-1;
+        public bool IsLast => SequenceNumber == TotalSequences - 1;
 
         internal long FileStreamStartIdx;
         internal int dataBufferOffset;
         internal int count;
         internal string seed;
+        internal string Hashcode = "";
         public FileTransfer()
         {
         }
@@ -41,65 +45,79 @@ namespace Videocall
         {
             this.FilePath = filePath;
             this.SequenceNumber = sequenceNumber;
-            this.seed= seed;
+            this.seed = seed;
             this.FileStreamStartIdx = startIndex;
             this.count = count;
-            this.TotalSequences= totalSequences;
+            this.TotalSequences = totalSequences;
+
         }
 
         internal void ReadBytes()
         {
-            if (FileStreamStartIdx - count == 0) 
+            if (count == 0)
                 return;
 
-            using (var streamData = new FileStream(seed+FilePath, FileMode.Open,FileAccess.Read, System.IO.FileShare.ReadWrite))
+            using (var streamData = new FileStream(seed + FilePath, FileMode.Open, FileAccess.Read, System.IO.FileShare.ReadWrite))
             {
                 streamData.Seek(FileStreamStartIdx, SeekOrigin.Begin);
 
                 Data = BufferPool.RentBuffer(count);
                 streamData.Read(Data, 0, count);
             }
-            if(Data.Length == 0)
-                Data= null;
+            if (Data.Length == 0)
+                Data = null;
 
         }
 
         internal MessageEnvelope ConvertToMessageEnvelope(out byte[] chunkBuffer)
         {
             chunkBuffer = Data;
-            var env =  new MessageEnvelope();
+            var env = new MessageEnvelope();
             var kvPairs = new Dictionary<string, string>();
 
             kvPairs["0"] = FilePath;
             kvPairs["1"] = SequenceNumber.ToString();
             kvPairs["2"] = TotalSequences.ToString();
             kvPairs["3"] = FileStreamStartIdx.ToString();
+            kvPairs["4"] = Hashcode;
 
-            env.KeyValuePairs= kvPairs;
-            env.SetPayload(Data,dataBufferOffset,count);
+            env.KeyValuePairs = kvPairs;
+            env.SetPayload(Data, dataBufferOffset, count);
             env.Header = MessageHeaders.FileTransfer;
             return env;
         }
 
         internal static FileTransfer CreateFromMessage(MessageEnvelope msg)
         {
-            var ft= new FileTransfer();
+            var ft = new FileTransfer();
             ft.FilePath = msg.KeyValuePairs["0"];
             ft.SequenceNumber = int.Parse(msg.KeyValuePairs["1"]);
             ft.TotalSequences = int.Parse(msg.KeyValuePairs["2"]);
             ft.FileStreamStartIdx = long.Parse(msg.KeyValuePairs["3"]);
+            ft.Hashcode = msg.KeyValuePairs["4"];
 
             ft.Data = msg.Payload;
-            ft.dataBufferOffset= msg.Offset;
-            ft.count= msg.Count;
+            ft.dataBufferOffset = msg.Offset;
+            ft.count = msg.Count;
             return ft;
 
         }
 
         internal void Release()
         {
-            if(Data!=null)
+            if (Data != null)
                 BufferPool.ReturnBuffer(Data);
+        }
+
+        internal void ComputeHash()
+        {
+            using (var md5 = MD5.Create())
+            {
+                using (var stream = File.OpenRead(seed + FilePath))
+                {
+                    Hashcode = BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+                }
+            }
         }
     }
 
@@ -108,7 +126,7 @@ namespace Videocall
         static ConcurrentProtoSerialiser serialiser = new ConcurrentProtoSerialiser();
         public FileDirectoryStructure CreateDirectoryTree(string path)
         {
-            FileDirectoryStructure structure =  new FileDirectoryStructure();
+            FileDirectoryStructure structure = new FileDirectoryStructure();
             structure.FileStructure = new Dictionary<string, List<string>>();
             string TopFolderName = Directory.GetParent(path).FullName;
 
@@ -125,7 +143,7 @@ namespace Videocall
                     structure.FileStructure[pathCut].Add(fileCut);
                 }
 
-                string [] subdirs = Directory.GetDirectories(path,"*",searchOption: SearchOption.AllDirectories);
+                string[] subdirs = Directory.GetDirectories(path, "*", searchOption: SearchOption.AllDirectories);
                 foreach (var subdir in subdirs)
                 {
                     var subdirCut = subdir.Replace(TopFolderName, "");
@@ -139,7 +157,7 @@ namespace Videocall
                     }
                 }
             }
-            else if(File.Exists(path))
+            else if (File.Exists(path))
             {
                 var dir = Path.GetDirectoryName(path);
 
@@ -156,12 +174,14 @@ namespace Videocall
         public List<FileTransfer> GetFiles(FileDirectoryStructure ds, int chunkSize = 1280000)
         {
             List<FileTransfer> files = new List<FileTransfer>();
+            List<FileTransfer> hashToCompute = new List<FileTransfer>();
+
             foreach (var folder in ds.FileStructure)
             {
                 foreach (var filePath in folder.Value)
                 {
                     //var bytes = File.ReadAllBytes(ds.seed + filePath);
-                    FileInfo fi = new FileInfo(ds.seed+ filePath);
+                    FileInfo fi = new FileInfo(ds.seed + filePath);
                     if (fi.Length > chunkSize)
                     {
                         int remain = (int)(fi.Length % chunkSize);
@@ -170,19 +190,25 @@ namespace Videocall
                         if (remain > 0) totalSeq++;
 
                         int i = 0;
-                        for ( i = 0; i < num; i++)
+                        for (i = 0; i < num; i++)
                         {
-                            files.Add(new FileTransfer(filePath,ds.seed, (long)chunkSize * i, chunkSize,i, totalSeq));
+                            files.Add(new FileTransfer(filePath, ds.seed, (long)chunkSize * i, chunkSize, i, totalSeq));
 
                         }
-                        if(remain>0)
-                            files.Add(new FileTransfer(filePath,ds.seed, (long)chunkSize * i, remain, i, totalSeq));
+                        if (remain > 0)
+                            files.Add(new FileTransfer(filePath, ds.seed, (long)chunkSize * i, remain, i, totalSeq));
 
                     }
                     else
                         files.Add(new FileTransfer(filePath, ds.seed, 0, (int)fi.Length, 0, 1));
+                    files.Last().ComputeHash();
+                    //hashToCompute.Add(files.Last());
 
-                }
+                };
+                //Parallel.ForEach(hashToCompute, toCompute =>
+                //{
+                //    toCompute.ComputeHash();
+                //});
             }
             return files;
         }
@@ -202,20 +228,34 @@ namespace Videocall
             {
                 File.Delete(filePath);
             }
-            if(!File.Exists(filePath))
+            if (!File.Exists(filePath))
                 new FileStream(filePath, FileMode.OpenOrCreate).Dispose();
 
-            if (ftMsg.Data == null || ftMsg.count ==0)
+            if (ftMsg.Data == null || ftMsg.count == 0)
                 return ftMsg;
 
-            using (var streamData = new FileStream(filePath, FileMode.Open,FileAccess.Write, System.IO.FileShare.ReadWrite)) 
+            using (var streamData = new FileStream(filePath, FileMode.Open, FileAccess.Write))
             {
-                streamData.Seek(ftMsg.FileStreamStartIdx,SeekOrigin.Begin);
+                streamData.Seek(ftMsg.FileStreamStartIdx, SeekOrigin.Begin);
                 streamData.Write(ftMsg.Data, ftMsg.dataBufferOffset, ftMsg.count);
             }
+            ThreadPool.UnsafeQueueUserWorkItem((s) =>
+            {
+                if (ftMsg.IsLast)
+                {
+                    using (var md5 = MD5.Create())
+                    {
+                        using (var stream = File.OpenRead(filePath))
+                        {
+                            var Hashcode = BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
+                            if (Hashcode != ftMsg.Hashcode)
+                                DebugLogWindow.AppendLog("ERROR", filePath + " is Corrupted");
+                        }
+                    }
+                }
+            }, null);
 
-                ////Path.get
-                //File.WriteAllBytes(filePath, ftMsg.Data);
+
             return ftMsg;
         }
 

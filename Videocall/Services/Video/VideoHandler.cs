@@ -5,6 +5,7 @@ using Protobuff;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,9 +21,15 @@ namespace Videocall
         [ProtoMember(2)]
         public byte[] Frame;
     }
+    enum CompressionType
+    {
+        Jpg = 0,
+        Webp,
+        Png
+    }
     internal class VideoHandler
     {
-
+        public CompressionType compressionType = CompressionType.Webp;
         public Action<byte[],Mat> OnCameraImageAvailable;
         public Action<Mat> OnNetworkFrameAvailable;
         public Action<int> QualityAutoAdjusted;
@@ -135,20 +142,37 @@ namespace Videocall
                             continue;
 
                         capture.Read(frame);
-                        ImageEncodingParam[] par= new ImageEncodingParam[1];
-                        par[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(10,95, compressionLevel_));
+                        ImageEncodingParam[] param;
+                        string extention = "";
+                        if (compressionType == CompressionType.Webp)
+                        {
+                            extention = ".webp";
+                            param = new ImageEncodingParam[1];
+                            param[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(10, 95, compressionLevel_));
+                        }
+                        else 
+                        {
+                            extention = ".jpg";
+                            param = new ImageEncodingParam[2];
+                            param[0] = new ImageEncodingParam(ImwriteFlags.JpegQuality, Clamp(10, 95, compressionLevel_));
+                            param[1] = new ImageEncodingParam(ImwriteFlags.JpegOptimize, 1);
+                        }
+                        
+
+                        
                       
                         byte[] imageBytes;
                         try
                         {
-                            imageBytes = frame.ImEncode(ext: ".webp", par);
+                            imageBytes = frame.ImEncode(ext: extention, param);
                             //imageBytes = frame.ImEncode(ext: ".jpg", param);
                             int imageByteSize = imageBytes.Length;
                             bytesSent += imageByteSize;
 
-                            if (imageByteSize > 60000)
+                            if (imageByteSize > 62000)
                             {
                                 compressionLevel_ -= 20;
+                                CompressionLevel--;
                                 QualityAutoAdjusted?.Invoke(compressionLevel_);
 
                                 continue;
@@ -207,7 +231,6 @@ namespace Videocall
             else
                 return;
 
-            //Console.WriteLine("Current Latency: " + currentLatency.ToString("N5") + "Avg: " + AverageLatency.ToString("N5"));
             if (AverageLatency == -1)
             {
                 AverageLatency = currentLatency;

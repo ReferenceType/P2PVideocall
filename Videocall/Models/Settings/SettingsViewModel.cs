@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ProtoBuf;
+using System;
 using System.Net;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,6 +20,7 @@ namespace Videocall.Settings
 
 
         private ComboBoxItem transportLayer;
+        private ComboBoxItem compressionFormat;
         private string logText;
 
         private string tcpLatency;
@@ -54,6 +56,20 @@ namespace Videocall.Settings
                 OnPropertyChanged();
             }
         }
+
+        public ComboBoxItem CompressionFormat
+        {
+            get => compressionFormat; set
+            {
+                if (value.Content == null) return;
+                compressionFormat = value;
+
+                HandleCompressionFormatChanged(compressionFormat.Content.ToString());
+                OnPropertyChanged();
+            }
+        }
+
+      
 
         public double FpsSliderValue
         {
@@ -147,7 +163,7 @@ namespace Videocall.Settings
         public string AverageLatency { get => averageLatency; private set { averageLatency = value; OnPropertyChanged(); } }
 
         public bool AutoReconnect { get; set; } = true;
-        public bool AutoHolepunch { get; set; } = false;
+        public bool AutoHolepunch { get; set; } = true;
 
         internal SettingsViewModel(ServiceHub services)
         {
@@ -171,9 +187,10 @@ namespace Videocall.Settings
             HandleConnectRequest(null);
         }
 
-        private void OnPeerRegistered(Guid obj)
+        private void OnPeerRegistered(Guid peerId)
         {
-            OnHolePunchClicked(null);
+            if(AutoHolepunch)
+                AutoPunch(peerId);
         }
 
         private void HandleClearChatHistory(object obj)
@@ -232,8 +249,7 @@ namespace Videocall.Settings
                 if (AutoReconnect)
                     HandleConnectRequest(null);
             }
-            if(AutoHolepunch)
-                OnHolePunchClicked(null);
+            
         }
         private void OnDisconnectClicked(object obj)
         {
@@ -247,6 +263,29 @@ namespace Videocall.Settings
                 HandleConnectRequest(null);
 
         }
+       
+        private async void AutoPunch(Guid peerId)
+        {
+            try
+            {
+                if (peerId.CompareTo(services.MessageHandler.client.sessionId) > 0)
+                {
+                    var res = await services.MessageHandler.client.RequestHolePunchAsync(peerId, 5000);
+                    if (!res)
+                        AddLog("\nHolePunch Failed on :" + peerId.ToString());
+
+                    else
+                        AddLog("\nHolePunch Sucessfull");
+                }
+                
+            }
+            catch (Exception ee)
+            {
+                AddLog("\nError: " + ee.Message);
+            }
+
+        }
+
         private async void OnHolePunchClicked(object obj)
         {
             if (holePunchRequestActive)
@@ -285,7 +324,10 @@ namespace Videocall.Settings
         {
             services.MessageHandler.TransportLayer = value;
         }
-
+        private void HandleCompressionFormatChanged(string v)
+        {
+            services.VideoHandler.compressionType = (CompressionType)Enum.Parse(typeof(CompressionType), v);
+        }
         private void HandleImageQualitySliderChanged(double value)
         {
             services.VideoHandler.CompressionLevel = (int)(value);

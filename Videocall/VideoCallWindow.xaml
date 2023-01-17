@@ -266,23 +266,29 @@
 
                         </Grid>
 
-                        <Grid HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="214" >
-                            <Rectangle HorizontalAlignment="Left" Height="212" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="3.944" RadiusY="3.944"/>
-                            <Rectangle HorizontalAlignment="Left" Height="212" Margin="205,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
-                            <Rectangle HorizontalAlignment="Left" Height="212" Margin="410,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                        <Grid HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="240" >
+                            <Rectangle HorizontalAlignment="Left" Height="240" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="3.944" RadiusY="3.944"/>
+                            <Rectangle HorizontalAlignment="Left" Height="240" Margin="205,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                            <Rectangle HorizontalAlignment="Left" Height="240" Margin="410,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
 
                             <Label Content="Audio Settings" HorizontalAlignment="Left" Margin="266,0,0,0" VerticalAlignment="Top"/>
                             <Label Content="Video Settings" HorizontalAlignment="Left" Margin="52,1,0,0" VerticalAlignment="Top"/>
+                            <Label Content="Compression:" HorizontalAlignment="Left" Margin="10,158,0,0" VerticalAlignment="Top"/>
 
+                            <ComboBox HorizontalAlignment="Left" Margin="118,160,0,0" VerticalAlignment="Top" Width="72" IsReadOnly="True" 
+                              SelectedItem="{Binding SettingsViewModel.CompressionFormat}" >
+                                <ComboBoxItem IsSelected="True" Content="Webp" Background="Black"/>
+                                <ComboBoxItem  Content="Jpg"/>
+                            </ComboBox>
                             <Label Content="Image Quality" HorizontalAlignment="Left" Margin="10,41,0,0" VerticalAlignment="Top"/>
                             <Slider x:Name="VideoQualitySlider" HorizontalAlignment="Left" Margin="6,72,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"
                                 Value="{Binding SettingsViewModel.ImageQualitySliderValue, Mode=TwoWay}" Maximum="100" />
 
-                            <Label Content="FPS" HorizontalAlignment="Left" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <Label Content="FPS" HorizontalAlignment="Left" Margin="10,90,0,0" VerticalAlignment="Top"/>
                             <Slider HorizontalAlignment="Left" Margin="6,120,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Minimum="5" Maximum="60" 
                                 Value="{Binding SettingsViewModel.FpsSliderValue}"/>
-                            <Label Content="{Binding SettingsViewModel.ImageTransferRate}" HorizontalAlignment="Left" Margin="10,154,0,0" VerticalAlignment="Top" Width="182"/>
-                            <Label Content="{Binding SettingsViewModel.AverageLatency}" HorizontalAlignment="Left" Margin="8,179,0,0" VerticalAlignment="Top" Width="182"/>
+                            <Label Content="{Binding SettingsViewModel.ImageTransferRate}" HorizontalAlignment="Left" Margin="10,195,0,0" VerticalAlignment="Top" Width="182"/>
+                            <Label Content="{Binding SettingsViewModel.AverageLatency}" HorizontalAlignment="Left" Margin="10,213,0,0" VerticalAlignment="Top" Width="182"/>
                             <Label Content="{Binding SettingsViewModel.ActualImageQuality}" HorizontalAlignment="Left" Margin="95,41,0,0" VerticalAlignment="Top"/>
 
 
