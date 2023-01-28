@@ -24,7 +24,7 @@
                
             </Grid.ColumnDefinitions>
             <TextBox Grid.Column="0" x:Name="DebugLog" HorizontalAlignment="Stretch" TextWrapping="Wrap" IsReadOnly="True" VerticalScrollBarVisibility="Visible"
-                 Text="{Binding Path=(local:DebugLogWindow.LogText)}" VerticalAlignment="Stretch" Width="auto" Height="auto"/>
+                 Text="{Binding Path=(local:DebugLogWindow.LogText)}" VerticalAlignment="Stretch" Width="auto" Height="auto" TextChanged="DebugLog_TextChanged"/>
 
         </Grid>
         

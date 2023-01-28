@@ -42,6 +42,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -122,10 +123,10 @@
     <Compile Include="Models\MainWindow\ChatDataModel.cs" />
     <Compile Include="Models\MainWindow\ChatSerializer.cs" />
     <Compile Include="Models\MainWindowEventAggregator.cs" />
+    <Compile Include="Services\Audio\JitterBuffer.cs" />
     <Compile Include="Services\ScreenShare\ScreenHelper.cs" />
     <Compile Include="Services\ScreenShare\ScreenShareHandler.cs" />
     <Compile Include="Services\ScreenShare\SimpleScreenShareHandler.cs" />
-    <Compile Include="Test.cs" />
     <Compile Include="Windows\AlertWindow.xaml.cs">
       <DependentUpon>AlertWindow.xaml</DependentUpon>
     </Compile>
@@ -136,15 +137,15 @@
     <Compile Include="Models\MainWindow\MainWindowModel.cs" />
     <Compile Include="Models\MainWindow\MainWindowViewModel.cs" />
     <Compile Include="Services\HttpProxy\IpRetriever.cs" />
-    <Compile Include="VideoCallWindow.xaml.cs">
-      <DependentUpon>VideoCallWindow.xaml</DependentUpon>
+    <Compile Include="MainWindow.xaml.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\Latency\LatencyPublisher.cs" />
     <Compile Include="Services\Network\MessageHandler.cs" />
     <Compile Include="UIHelpers\PropertyNotifyBase.cs" />
     <Compile Include="UIHelpers\RelayCommand.cs" />
     <Compile Include="Services\ServiceHub.cs" />
-    <Compile Include="Models\Settings\SettingConfig.cs" />
+    <Compile Include="Models\Settings\PersistentSettingConfig.cs" />
     <Compile Include="Services\Notifications\ToastNotificationHandler.cs" />
     <Compile Include="Windows\CameraWindow.xaml.cs">
       <DependentUpon>CameraWindow.xaml</DependentUpon>
@@ -170,7 +171,7 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Services\Audio\AudioHandler.cs" />
-    <Page Include="VideoCallWindow.xaml">
+    <Page Include="MainWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -203,7 +204,6 @@
     <None Include="Models\Settings\Settings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Videocall_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -241,9 +241,6 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="favicon.ico" />
-  </ItemGroup>
-  <ItemGroup>
     <Resource Include="Resources\9-95099_camera-icon-png-image-camera-apple-icon-transparent.png" />
   </ItemGroup>
   <ItemGroup>
@@ -253,14 +250,6 @@
     <Resource Include="Resources\favicon2.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="favicon2.ico">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="9-95099_camera-icon-png-image-camera-apple-icon-transparent.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Resources\micoff_111072.png" />

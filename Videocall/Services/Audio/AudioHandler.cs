@@ -1,17 +1,15 @@
 ﻿using NAudio.Codecs;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using NetworkLibrary.Components;
 using NetworkLibrary.Utils;
 using ProtoBuf;
 using Protobuff;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Data;
-using System.IO;
-using System.Linq;
-using System.Threading;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace Videocall
 {
@@ -35,137 +33,11 @@ namespace Videocall
         public int NumLostPackages;
         public int TotalNumDroppedPAckages;
     }
-    class JitterBuffer
-    {
-        private Dictionary<DateTime,AudioSample> samples = new Dictionary<DateTime, AudioSample>();
-        readonly object locker = new object();
-        private MemoryStream sampleStream = new MemoryStream();
-        public Action<byte[], int, int> OnSamplesCollected;
-        private DateTime LastBatchTimeStamp = DateTime.Now;
-        public int BufferLatency;
-        private int NumSqBuffered = 0;
-        private AutoResetEvent bufferFullEvent = new AutoResetEvent(false); 
-        public int NumLostPackages = 0;
-
-        public JitterBuffer(int bufferLatency)
-        {
-            this.BufferLatency = bufferLatency;
-            StartPublushing2();
-           
-        }
-        // publish if anything is in buffer.
-        public void StartPublushing2()
-        {
-            Thread t = new Thread(() =>
-            {
-                while (true)
-                {
-                    bufferFullEvent.WaitOne();
-                    lock (locker)
-                    {
-                        //if (samples.Count < 11)
-                        //    continue;
-
-
-                        var samplesOrdered = samples.OrderByDescending(x => x.Key).Reverse();
-                        //samplesOrdered = samplesOrdered.Take(samplesOrdered.Count() - 10);
-                        int toTake = Math.Min(2, NumSqBuffered) + (samplesOrdered.Count() - (BufferLatency / 20));
-                        samplesOrdered = samplesOrdered.Take(Math.Min(toTake, samplesOrdered.Count()));
-
-                        LastBatchTimeStamp = samplesOrdered.Last().Key;
-
-                        var sampArry = samplesOrdered.ToImmutableArray();
-                        for (int i = 0; i < sampArry.Length - 1; i++)
-                        {
-                           
-                            if (sampArry[i].Value.SquenceNumber + 1 == sampArry[i + 1].Value.SquenceNumber)
-                            {
-                                sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
-                            }
-                            // lost packets we conceal them here
-                            else
-                            {
-                                int delta = sampArry[i + 1].Value.SquenceNumber - sampArry[i].Value.SquenceNumber;
-                                for (int j = 0; j < delta - 1; j++)
-                                {
-                                    sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
-                                    NumLostPackages++;
-                                    Console.WriteLine("Drop");
-                                }
-
-
-                            }
-                            samples.Remove(sampArry[i].Key);
-                            NumSqBuffered--;
-
-                        }
-                        //if (numDrops > 2)
-                        //{
-                        //    BufferLatency += 20;
-                        //    Console.WriteLine("Increased");
-
-                        //}
-
-
-                        try
-                        {
-                            OnSamplesCollected?.Invoke(sampleStream.GetBuffer(), 0, (int)sampleStream.Position);
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(e.Message);
-                        }
-
-                        sampleStream.Position = 0;
-                    }
-
-                }
-            });
-            t.Priority = ThreadPriority.AboveNormal;
-            t.Start();
-        }
-        public void AddSample(AudioSample sample)
-        {
-            lock (locker)
-            {
-
-                if (!samples.ContainsKey(sample.Timestamp) && sample.Timestamp > LastBatchTimeStamp)
-                {
-                    samples.Add(sample.Timestamp, sample);
-                    NumSqBuffered++;
-                    if(NumSqBuffered >= BufferLatency/20)
-                    {
-                        bufferFullEvent.Set();
-                    }
-                }
-            }
-        }
-
-        public void DiscardSamples(int num)
-        {
-            lock (locker)
-            {
-                var samplesOrdered = samples.OrderByDescending(x => x.Key).Reverse();
-                //samplesOrdered = samplesOrdered.Take(samplesOrdered.Count() - 10);
-                samplesOrdered = samplesOrdered.Take(Math.Min(num, samplesOrdered.Count()));
-
-                foreach (var item in samplesOrdered)
-                {
-                    samples.Remove(item.Key);
-                    NumSqBuffered--;
-
-                }
-            }
-               
-        }
-
-       
-    }
     internal class AudioHandler
     {
-
         public Action<AudioSample> OnAudioAvailable;
         public Action<AudioStatistics> OnStatisticsAvailable;
+
         private WaveOutEvent player;
         private BufferedWaveProvider soundListenBuffer;
         private WaveInEvent waveIn;
@@ -173,9 +45,12 @@ namespace Videocall
         private VolumeSampleProvider volumeSampleProvider;
         private Queue<AudioSample> delayedSamples =  new Queue<AudioSample>();
         private ConcurrentProtoSerialiser serialiser = new ConcurrentProtoSerialiser();
-        DateTime lastSampleTime = DateTime.Now;
+        private DateTime lastSampleTime = DateTime.Now;
+        private SharerdMemoryStreamPool streamPool = new SharerdMemoryStreamPool();
+        private ushort currentSqnNo;
+        private int lastLostPackckageAmount = 0;
 
-        private JitterBuffer collector;
+        private JitterBuffer jitterBuffer;
         public bool SendTwice = false;
 
         private int bufferLatency = 200;
@@ -183,10 +58,10 @@ namespace Videocall
             set 
             {
                 if(value<bufferLatency)
-                    collector.DiscardSamples((int)soundListenBuffer.BufferDuration.TotalMilliseconds/20);
+                    jitterBuffer.DiscardSamples((int)soundListenBuffer.BufferDuration.TotalMilliseconds/20);
                 // drop the amount of buffered duration
                 bufferLatency = value; 
-                collector.BufferLatency = value;
+                jitterBuffer.BufferLatency = value;
             }
         }
         private float gain=3;
@@ -195,9 +70,7 @@ namespace Videocall
 
         public bool LoopbackAudio { get; internal set; }
 
-        private MemoryStreamPool streamPool = new MemoryStreamPool();
-        private ushort currentSqnNo;
-        private int lastLostPackckageAmount = 0;
+      
         public AudioHandler()
         {
             soundListenBuffer = new BufferedWaveProvider(format);
@@ -213,8 +86,8 @@ namespace Videocall
             player.Volume = 1;
 
             
-            collector = new JitterBuffer(BufferLatency);
-            collector.OnSamplesCollected += ProcessBufferedAudio;
+            jitterBuffer = new JitterBuffer(BufferLatency);
+            jitterBuffer.OnSamplesCollected += ProcessBufferedAudio;
 
             waveIn = new WaveInEvent();
             waveIn.WaveFormat = format;
@@ -239,17 +112,17 @@ namespace Videocall
             {
                 BufferedDuration = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds,
                 BufferSize = (int)soundListenBuffer.BufferDuration.TotalMilliseconds,
-                TotalNumDroppedPAckages = collector.NumLostPackages,
-                NumLostPackages = (collector.NumLostPackages - lastLostPackckageAmount)/10,
+                TotalNumDroppedPAckages = jitterBuffer.NumLostPackages,
+                NumLostPackages = (jitterBuffer.NumLostPackages - lastLostPackckageAmount)/10,
 
             };
-            lastLostPackckageAmount = collector.NumLostPackages;
+            lastLostPackckageAmount = jitterBuffer.NumLostPackages;
             return data;
         }
 
         public void ResetStatistics()
         {
-            collector.NumLostPackages= 0;
+            jitterBuffer.NumLostPackages= 0;
         }
 
         private void MicAudioRecieved(object sender, WaveInEventArgs e)
@@ -279,7 +152,7 @@ namespace Videocall
                     }
                    
                 }
-
+                #region Test/Debug
                 //debug jitter
                 return;
 
@@ -297,7 +170,7 @@ namespace Videocall
 
                     });
                 }
-
+                #endregion
 
             }
             catch { }
@@ -306,7 +179,7 @@ namespace Videocall
 
         public void ProcessAudio(AudioSample sample)
         {
-            collector.AddSample(sample);
+            jitterBuffer.AddSample(sample);
         }
 
         public void ProcessAudio(MessageEnvelope packedSample)
@@ -316,16 +189,12 @@ namespace Videocall
 
         }
 
-        
-
         private void ProcessBufferedAudio(byte[] soundBytes,int offset, int count)
         {
-            MemoryStream DecodeStream = streamPool.RentStream();
+            var DecodeStream = streamPool.RentStream();
 
             Decode(DecodeStream, soundBytes, offset, count);
             soundListenBuffer?.AddSamples(DecodeStream.GetBuffer(), 0, (int)DecodeStream.Position);
-            //Console.WriteLine(soundListenBuffer.BufferDuration.TotalMilliseconds);
-            //Console.WriteLine(soundListenBuffer.BufferedDuration.TotalMilliseconds);
             streamPool.ReturnStream(DecodeStream);
 
         }
@@ -341,18 +210,29 @@ namespace Videocall
         public void StopSpreakers()
         {
             if (player.PlaybackState == PlaybackState.Playing)
-
                 player.Stop();
         }
 
         public void StartMic()
         {
-            waveIn.StartRecording();
+            try
+            {
+                waveIn.StartRecording();
+            }
+            catch { }
+        }
+        public void StopMic()
+        {
+            try
+            {
+                waveIn.StopRecording();
+            }
+            catch { }
         }
 
         #region Encode - Decode Mlaw
 
-        public byte[] Encode(byte[] data, int offset, int length)
+        private byte[] Encode(byte[] data, int offset, int length)
         {
            
             var encoded = new byte[length / 2];
@@ -364,10 +244,10 @@ namespace Videocall
             return encoded;
         }
 
-        public void Encode(MemoryStream encodeInto,byte[] data, int offset, int length)
+        private void Encode(PooledMemoryStream encodeInto,byte[] data, int offset, int length)
         {
-            if (encodeInto.Capacity < length / 2)
-                encodeInto.Capacity = length / 2;
+            if (encodeInto.Length < length / 2)
+                encodeInto.SetLength( length / 2);
 
             var encoded = encodeInto.GetBuffer();
             int outIndex = 0;
@@ -378,7 +258,7 @@ namespace Videocall
             encodeInto.Position = length / 2;
         }
 
-        public byte[] Decode(byte[] data, int offset, int length)
+        private byte[] Decode(byte[] data, int offset, int length)
         {
             var decoded = new byte[length * 2];
             int outIndex = 0;
@@ -390,10 +270,10 @@ namespace Videocall
             }
             return decoded;
         }
-        public void Decode(MemoryStream decodeInto, byte[] data, int offset, int length)
+        private void Decode(PooledMemoryStream decodeInto, byte[] data, int offset, int length)
         {
-            if(decodeInto.Capacity< length*2)
-                decodeInto.Capacity = length*2;
+            if(decodeInto.Length < length*2)
+                decodeInto.SetLength( length*2);
 
             var decoded = decodeInto.GetBuffer();
             int outIndex = 0;
@@ -412,7 +292,7 @@ namespace Videocall
         #endregion
         internal void FlushBuffers()
         {
-            collector.DiscardSamples(100);
+            jitterBuffer.DiscardSamples(100);
         }
     }
 }

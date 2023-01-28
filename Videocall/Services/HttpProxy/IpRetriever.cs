@@ -7,7 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Media.Protection.PlayReady;
-using static Videocall.VideoCallWindow;
+using static Videocall.MainWindow;
 
 namespace Videocall.Services.HttpProxy
 {

@@ -73,5 +73,10 @@ namespace Videocall
         {
             this.Hide();
         }
+
+        private void DebugLog_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            
+        }
     }
 }

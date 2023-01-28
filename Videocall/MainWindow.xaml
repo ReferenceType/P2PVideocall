@@ -1,4 +1,4 @@
-﻿<Window x:Class="Videocall.VideoCallWindow"
+﻿<Window x:Class="Videocall.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -165,7 +165,7 @@
                                                     <StackPanel Margin="0,10,10,0">
                                                         <TextBox BorderThickness="0" Style="{StaticResource BorderlessTextBox}" IsReadOnly="True"   Text="{Binding Message, Mode=OneWay}" HorizontalAlignment= "Left"  TextWrapping="Wrap"  VerticalAlignment="Center"  FontSize="14"/>
                                                         <TextBlock VerticalAlignment="Center" Height="{Binding URIHeight}">
-                                                    <Hyperlink NavigateUri="{Binding URI}" RequestNavigate="Hyperlink_RequestNavigate" Foreground="AliceBlue">
+                                                    <Hyperlink NavigateUri="{Binding URI}" RequestNavigate="OnHyperlinkClicked" Foreground="AliceBlue">
                                                         <!--<TextBlock Text="{Binding URI}" FontSize="14" />-->
                                                         <TextBlock TextWrapping="Wrap" TextDecorations="Underline"><Run FontWeight="Bold" Text="{Binding URI}" /></TextBlock>
                                                     </Hyperlink>                
@@ -212,47 +212,55 @@
                             <Rectangle HorizontalAlignment="Center" Height="223" Margin="0,10,0,0" Stroke="DimGray" VerticalAlignment="Top" Width="788"/>
 
                             <Label Content="IP/Host" HorizontalAlignment="Left" Margin="34,32,0,0" VerticalAlignment="Top"/>
-                            <TextBox x:Name="IpText" HorizontalAlignment="Left" Margin="89,36,0,0" TextWrapping="Wrap" Text="{Binding SettingsViewModel.Config.Ip}" VerticalAlignment="Top" Width="120" />
+                            <TextBox x:Name="IpText" HorizontalAlignment="Left" Margin="89,36,0,0" TextWrapping="Wrap"
+                                     Text="{Binding SettingsViewModel.Config.Ip}" VerticalAlignment="Top" Width="120" />
                             <Label Content="Port" HorizontalAlignment="Left" Margin="34,63,0,0" VerticalAlignment="Top"/>
-                            <TextBox x:Name="PortText" HorizontalAlignment="Left" Margin="89,67,0,0" TextWrapping="Wrap" Text="{Binding SettingsViewModel.Config.Port}" VerticalAlignment="Top" Width="120" />
+                            <TextBox x:Name="PortText" HorizontalAlignment="Left" Margin="89,67,0,0" TextWrapping="Wrap"
+                                     Text="{Binding SettingsViewModel.Config.Port}" VerticalAlignment="Top" Width="120" />
                             <Label  Content="UserName" HorizontalAlignment="Left" Margin="256,32,0,0" VerticalAlignment="Top"/>
-                            <TextBox x:Name="UserName" HorizontalAlignment="Left" Margin="339,36,0,0" TextWrapping="Wrap" Text="{Binding SettingsViewModel.Config.Name}" VerticalAlignment="Top" Width="120" />
+                            <TextBox x:Name="UserName" HorizontalAlignment="Left" Margin="339,36,0,0" TextWrapping="Wrap"
+                                     Text="{Binding SettingsViewModel.Config.Name}" VerticalAlignment="Top" Width="120" />
+                            <Label Content="Transport Layer" HorizontalAlignment="Left" Margin="246,73,0,0" VerticalAlignment="Top"/>
 
-
-                            <Button Content="Disconnect" HorizontalAlignment="Left" Margin="11,164,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.883,-2.553" Width="78"
-                            Command="{Binding SettingsViewModel.DisconnectButtonClickCommand}" >
-                                <Button.Effect>
-                                    <DropShadowEffect/>
-                                </Button.Effect>
-                            </Button>
-                            <CheckBox Content="Auto Reconnect" Foreground="WhiteSmoke" Margin="502,36,170,177"   IsChecked="{Binding  SettingsViewModel.AutoReconnect}" Height="20"/>
-                            <CheckBox Content="Auto HolePunch" Foreground="WhiteSmoke" Margin="502,77,170,136"   IsChecked="{Binding  SettingsViewModel.AutoHolepunch}" Height="20"/>
-                            <TextBox x:Name="Status" HorizontalAlignment="Left" Margin="103,132,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="356" Height="81" 
-                             Text="{Binding SettingsViewModel.LogText}"/>
+                            <ComboBox x:Name="SoundQuality_Copy" HorizontalAlignment="Left" Margin="339,73,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" 
+                              SelectedItem="{Binding SettingsViewModel.TransportLayer}" >
+                                <ComboBoxItem IsSelected="True" Content="Udp" Background="Black"/>
+                                <ComboBoxItem  Content="Tcp"/>
+                            </ComboBox>
+                            
                             <Button Content="Connect" HorizontalAlignment="Left" Margin="11,132,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.883,-2.553" Width="78" 
                              Command="{Binding SettingsViewModel.ConnectButtonClickCommand}" >
                                 <Button.Effect>
                                     <DropShadowEffect/>
                                 </Button.Effect>
                             </Button>
-                            <ComboBox x:Name="SoundQuality_Copy" HorizontalAlignment="Left" Margin="339,73,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" 
-                              SelectedItem="{Binding SettingsViewModel.TransportLayer}" >
-                                <ComboBoxItem IsSelected="True" Content="Udp" Background="Black"/>
-                                <ComboBoxItem  Content="Tcp"/>
-                            </ComboBox>
-                            <Label Content="Transport Layer" HorizontalAlignment="Left" Margin="246,73,0,0" VerticalAlignment="Top"/>
-
+                            <Button Content="Disconnect" HorizontalAlignment="Left" Margin="11,164,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.883,-2.553" Width="78"
+                            Command="{Binding SettingsViewModel.DisconnectButtonClickCommand}" >
+                                <Button.Effect>
+                                    <DropShadowEffect/>
+                                </Button.Effect>
+                            </Button>
                             <Button Content="TryPunchHole" HorizontalAlignment="Left" Margin="10,193,0,0" VerticalAlignment="Top" Width="79"
                              Command="{Binding SettingsViewModel.HolePunchClickCommand}" >
                                 <Button.Effect>
                                     <DropShadowEffect/>
                                 </Button.Effect>
                             </Button>
-
+                            
                             <TextBlock x:Name="ServerTcpLatency" HorizontalAlignment="Left" Margin="140,111,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="160"
                                Text="{Binding SettingsViewModel.TcpLatency}"/>
                             <TextBlock x:Name="ServerUdpLatency" HorizontalAlignment="Left" Margin="309,111,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="160"
                                Text="{Binding SettingsViewModel.UdpLatency}"/>
+                            
+                            <TextBox x:Name="Status" HorizontalAlignment="Left" Margin="103,132,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="356" Height="81" 
+                             Text="{Binding SettingsViewModel.LogText}" TextChanged="Status_TextChanged"/>
+                            
+                            <CheckBox Content="Auto Reconnect" Foreground="WhiteSmoke" Margin="502,36,170,177"  
+                                      IsChecked="{Binding  SettingsViewModel.Config.AutoReconnect}" Height="20"/>
+                            <CheckBox Content="Auto HolePunch" Foreground="WhiteSmoke" Margin="502,77,170,136" 
+                                      IsChecked="{Binding  SettingsViewModel.Config.AutoHolepunch}" Height="20"/>
+                            
+                           
                             <Button Content="Get Ip With Proxy" HorizontalAlignment="Left" Margin="655,40,0,0" VerticalAlignment="Top" Width="104" 
                             Command="{Binding SettingsViewModel.HTTPProxtIpCommand}"/>
                             <Button Content="Show Debug Log" HorizontalAlignment="Left" Margin="655,80,0,0" VerticalAlignment="Top" Width="104" Click="ShowDebugWindow"/>
@@ -263,63 +271,70 @@
                             <TextBox x:Name="FtChunk" HorizontalAlignment="Left" Margin="651,199,0,0" TextWrapping="Wrap"
                                      Text="{Binding SettingsViewModel.Config.ChunkSize}" VerticalAlignment="Top" Width="112" />
 
-
                         </Grid>
+                        <!--Bottom-->
 
                         <Grid HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="240" >
-                            <Rectangle HorizontalAlignment="Left" Height="240" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="3.944" RadiusY="3.944"/>
-                            <Rectangle HorizontalAlignment="Left" Height="240" Margin="205,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
-                            <Rectangle HorizontalAlignment="Left" Height="240" Margin="410,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Grid HorizontalAlignment="Left" >
+                                    <Rectangle HorizontalAlignment="Left" Height="240" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="3.944" RadiusY="3.944"/>
+                                    <Label Content="Video Settings" HorizontalAlignment="Center" Margin="0,1,0,0" VerticalAlignment="Top"/>
 
-                            <Label Content="Audio Settings" HorizontalAlignment="Left" Margin="266,0,0,0" VerticalAlignment="Top"/>
-                            <Label Content="Video Settings" HorizontalAlignment="Left" Margin="52,1,0,0" VerticalAlignment="Top"/>
-                            <Label Content="Compression:" HorizontalAlignment="Left" Margin="10,158,0,0" VerticalAlignment="Top"/>
+                                    <Label Content="Image Quality" HorizontalAlignment="Left" Margin="5,41,0,0" VerticalAlignment="Top"/>
+                                    <Label Content="{Binding SettingsViewModel.ActualImageQuality}" HorizontalAlignment="Left" Margin="95,41,0,0" VerticalAlignment="Top"/>
 
-                            <ComboBox HorizontalAlignment="Left" Margin="118,160,0,0" VerticalAlignment="Top" Width="72" IsReadOnly="True" 
-                              SelectedItem="{Binding SettingsViewModel.CompressionFormat}" >
-                                <ComboBoxItem IsSelected="True" Content="Webp" Background="Black"/>
-                                <ComboBoxItem  Content="Jpg"/>
-                            </ComboBox>
-                            <Label Content="Image Quality" HorizontalAlignment="Left" Margin="10,41,0,0" VerticalAlignment="Top"/>
-                            <Slider x:Name="VideoQualitySlider" HorizontalAlignment="Left" Margin="6,72,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"
+                                    <Slider x:Name="VideoQualitySlider" HorizontalAlignment="Left" Margin="5,72,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"
                                 Value="{Binding SettingsViewModel.ImageQualitySliderValue, Mode=TwoWay}" Maximum="100" />
 
-                            <Label Content="FPS" HorizontalAlignment="Left" Margin="10,90,0,0" VerticalAlignment="Top"/>
-                            <Slider HorizontalAlignment="Left" Margin="6,120,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Minimum="5" Maximum="60" 
+                                    <Label Content="FPS" HorizontalAlignment="Left" Margin="5,90,0,0" VerticalAlignment="Top"/>
+                                    <Slider HorizontalAlignment="Left" Margin="6,120,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Minimum="5" Maximum="60" 
                                 Value="{Binding SettingsViewModel.FpsSliderValue}"/>
-                            <Label Content="{Binding SettingsViewModel.ImageTransferRate}" HorizontalAlignment="Left" Margin="10,195,0,0" VerticalAlignment="Top" Width="182"/>
-                            <Label Content="{Binding SettingsViewModel.AverageLatency}" HorizontalAlignment="Left" Margin="10,213,0,0" VerticalAlignment="Top" Width="182"/>
-                            <Label Content="{Binding SettingsViewModel.ActualImageQuality}" HorizontalAlignment="Left" Margin="95,41,0,0" VerticalAlignment="Top"/>
 
+                                    <Label Content="CompressionType:" HorizontalAlignment="Left" Margin="5,158,0,0" VerticalAlignment="Top"/>
 
-                            <CheckBox Foreground="WhiteSmoke" Content="Listen Yourself" HorizontalAlignment="Left" Margin="214,39,0,0" VerticalAlignment="Top" 
+                                    <ComboBox HorizontalAlignment="Left" Margin="118,160,0,0" VerticalAlignment="Top" Width="72" IsReadOnly="True" 
+                                    SelectedItem="{Binding SettingsViewModel.CompressionFormat}" >
+                                        <ComboBoxItem IsSelected="True" Content="Webp" Background="Black"/>
+                                        <ComboBoxItem  Content="Jpg"/>
+
+                                    </ComboBox>
+                                    <Label Content="{Binding SettingsViewModel.ImageTransferRate}" HorizontalAlignment="Left" Margin="5,195,0,0" VerticalAlignment="Top" Width="182"/>
+                                    <Label Content="{Binding SettingsViewModel.AverageLatency}" HorizontalAlignment="Left" Margin="5,213,0,0" VerticalAlignment="Top" Width="182"/>
+                                </Grid>
+                                <Grid Width="4"/>
+                                <Grid HorizontalAlignment="Left">
+                                    <Rectangle HorizontalAlignment="Left" Height="240"  Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                                    <Label Content="Audio Settings" HorizontalAlignment="Center"  VerticalAlignment="Top"/>
+
+                                    <CheckBox Foreground="WhiteSmoke" Content="Listen Yourself" HorizontalAlignment="Left" Margin="5,39,0,0" VerticalAlignment="Top" 
                                   IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
-
-                            <Label Content="Volume" HorizontalAlignment="Left" Margin="211,84,0,0" VerticalAlignment="Top"/>
-                            <Slider HorizontalAlignment="Left" Margin="211,115,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="50"
-                                Value="{Binding SettingsViewModel.VolumeValue}"/>
-                            <CheckBox Foreground="WhiteSmoke" Content="SendDoubleAudio" HorizontalAlignment="Left" Margin="214,64,0,0" VerticalAlignment="Top" 
+                                    <CheckBox Foreground="WhiteSmoke" Content="SendDoubleAudio" HorizontalAlignment="Left" Margin="5,64,0,0" VerticalAlignment="Top" 
                                   IsChecked="{Binding SettingsViewModel.SendDoubleAudiocheck}"  />
-                            <Label Content="Jitter Buffer Duration" HorizontalAlignment="Left" Margin="210,138,0,0" VerticalAlignment="Top"/>
-                            <Slider HorizontalAlignment="Left" Margin="211,164,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="600" Minimum="60"
-                                Value="{Binding SettingsViewModel.BufferDurationValue}"/>
 
-                            <TextBlock HorizontalAlignment="Left" Margin="484,5,0,0" TextWrapping="Wrap" Text="Statistics" VerticalAlignment="Top"/>
-                            <TextBlock HorizontalAlignment="Left" Margin="422,46,0,0" TextWrapping="Wrap" Text="Buffer Level" VerticalAlignment="Top"/>
-                            <ProgressBar HorizontalAlignment="Left" Height="10" Margin="497,49,0,0" VerticalAlignment="Top" Width="100" Background="Black"
+                                    <Label Content="Volume" HorizontalAlignment="Left" Margin="5,84,0,0" VerticalAlignment="Top"/>
+                                    <Slider HorizontalAlignment="Left" Margin="5,115,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="50"
+                                Value="{Binding SettingsViewModel.VolumeValue}"/>
+
+                                    <Label Content="Jitter Buffer Duration" HorizontalAlignment="Left" Margin="5,138,0,0" VerticalAlignment="Top"/>
+                                    <Slider HorizontalAlignment="Left" Margin="5,164,0,0" VerticalAlignment="Top" Width="185" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="600" Minimum="60"
+                                Value="{Binding SettingsViewModel.BufferDurationValue}"/>
+                                </Grid>
+                                <Grid Width="4"/>
+                                <Grid HorizontalAlignment="Left">
+                                    <Rectangle HorizontalAlignment="Left" Height="240" Margin="0,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                                    <TextBlock HorizontalAlignment="Center" Margin="0,5,0,0" TextWrapping="Wrap" Text="Audio Statistics" VerticalAlignment="Top"/>
+                                    <TextBlock HorizontalAlignment="Left" Margin="5,46,0,0" TextWrapping="Wrap" Text="Buffer Level" VerticalAlignment="Top"/>
+                                    <ProgressBar HorizontalAlignment="Left" Height="10" Margin="90,49,0,0" VerticalAlignment="Top" Width="100" Background="Black"
                                      Value="{Binding SettingsViewModel.BufferedDurationPercentage}"/>
 
-                            <TextBlock HorizontalAlignment="Left" Margin="422,80,0,0" TextWrapping="Wrap" 
+                                    <TextBlock HorizontalAlignment="Left" Margin="5,80,0,0" TextWrapping="Wrap" 
                                    Text="{Binding SettingsViewModel.TotalNumLostPackages}" VerticalAlignment="Top"/>
-                            <TextBlock HorizontalAlignment="Left" Margin="422,111,0,0" TextWrapping="Wrap" 
+                                    <TextBlock HorizontalAlignment="Left" Margin="5,111,0,0" TextWrapping="Wrap" 
                                    Text="{Binding SettingsViewModel.PackageLossRate}" VerticalAlignment="Top"/>
-
-
-
+                                </Grid>
+                            </StackPanel>
                         </Grid>
-
                     </StackPanel>
-
                 </Grid>
             </TabItem>
         </TabControl>

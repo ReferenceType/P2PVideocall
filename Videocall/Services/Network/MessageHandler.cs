@@ -58,6 +58,7 @@ namespace Videocall
         private void HandlePeerRegistered(Guid id)
         {
            registeredPeers.Add(id);
+            Console.WriteLine("Peer Registered");
         }
 
         
@@ -80,7 +81,7 @@ namespace Videocall
        internal void SendStreamMessage<T>(Guid id, T message) where T : IProtoMessage
         {
             if (TransportLayer == "Udp")
-                client.SendUdpMesssage(id, message);
+                client.SendUdpMesssage(id, message,channel:1);
 
             else
                 client.SendAsyncMessage(id, message);

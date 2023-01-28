@@ -22,10 +22,15 @@ namespace Videocall.Models
         }
 
         public event Action ClearChatHistoryRequested;
+        public event Action<PeerInfo> PeerRegistered;
 
         public void InvokeClearChatEvent()
         {
             ClearChatHistoryRequested?.Invoke();
+        }
+        public void InvokePeerRegisteredEvent(Videocall.PeerInfo info)
+        {
+            PeerRegistered?.Invoke(info);
         }
     }
 }

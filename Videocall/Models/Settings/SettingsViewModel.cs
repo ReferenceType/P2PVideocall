@@ -1,6 +1,7 @@
 ﻿using ProtoBuf;
 using System;
 using System.Net;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -147,7 +148,7 @@ namespace Videocall.Settings
         private bool holePunchRequestActive;
         private string averageLatency;
 
-        public SettingConfig Config { get; set; } = SettingConfig.Instance;
+        public PersistentSettingConfig Config { get; set; } = PersistentSettingConfig.Instance;
         public string TcpLatency { get => tcpLatency; set { tcpLatency = value; OnPropertyChanged(); } }
         public string UdpLatency { get => udpLatency; set { udpLatency = value; OnPropertyChanged(); } }
 
@@ -162,8 +163,8 @@ namespace Videocall.Settings
 
         public string AverageLatency { get => averageLatency; private set { averageLatency = value; OnPropertyChanged(); } }
 
-        public bool AutoReconnect { get; set; } = true;
-        public bool AutoHolepunch { get; set; } = true;
+        //public bool AutoReconnect { get; set; } = true;
+        //public bool AutoHolepunch { get; set; } = true;
 
         internal SettingsViewModel(ServiceHub services)
         {
@@ -176,7 +177,7 @@ namespace Videocall.Settings
 
 
             services.MessageHandler.client.OnDisconnected += OnDisconnected;
-            services.MessageHandler.client.OnPeerRegistered += OnPeerRegistered;
+            //services.MessageHandler.client.OnPeerRegistered += OnPeerRegistered;
             services.LatencyPublisher.Latency += OnLatencyAvailable;
 
             services.AudioHandler.OnStatisticsAvailable += HandleAudioStatistics;
@@ -185,12 +186,13 @@ namespace Videocall.Settings
             services.VideoHandler.AverageLatencyPublished += (value) => AverageLatency ="Average Latency: " +value.ToString("N1") +" ms";
 
             HandleConnectRequest(null);
+            MainWindowEventAggregator.Instance.PeerRegistered+= OnPeerRegistered;
         }
 
-        private void OnPeerRegistered(Guid peerId)
+        private void OnPeerRegistered(PeerInfo info)
         {
-            if(AutoHolepunch)
-                AutoPunch(peerId);
+            if(Config.AutoHolepunch)
+                AutoPunch(info.Guid);
         }
 
         private void HandleClearChatHistory(object obj)
@@ -214,7 +216,7 @@ namespace Videocall.Settings
                 if (ip == null)
                     DispatcherRun(() => { LogText += "\nUnable To Retrieve Ip"; });
                 else
-                    SettingConfig.Instance.Ip = ip;
+                    PersistentSettingConfig.Instance.Ip = ip;
                 DispatcherRun(() => { LogText += "\nSucessfully retrieved  the IP: " + ip; });
 
             }
@@ -246,21 +248,23 @@ namespace Videocall.Settings
             catch
             {
                 AddLog("\nError..");
-                if (AutoReconnect)
-                    HandleConnectRequest(null);
+                if (Config.AutoReconnect)
+                    Task.Run(async () => { await Task.Delay(3000); HandleConnectRequest(null); });
+
             }
-            
+
         }
         private void OnDisconnectClicked(object obj)
         {
+            CallStateManager.EndCall();
             services.MessageHandler.client.Disconnect();
         }
         private void OnDisconnected()
         {
             AddLog("\nDisconnected");
             CallStateManager.EndCall();
-            if(AutoReconnect)
-                HandleConnectRequest(null);
+            if (Config.AutoReconnect)
+                Task.Run(async () => {await Task.Delay(1000); HandleConnectRequest(null); });
 
         }
        
@@ -326,7 +330,7 @@ namespace Videocall.Settings
         }
         private void HandleCompressionFormatChanged(string v)
         {
-            services.VideoHandler.compressionType = (CompressionType)Enum.Parse(typeof(CompressionType), v);
+            services.VideoHandler.CompressionType = (CompressionType)Enum.Parse(typeof(CompressionType), v);
         }
         private void HandleImageQualitySliderChanged(double value)
         {
@@ -368,10 +372,10 @@ namespace Videocall.Settings
             try
             {
                 Application.Current?.Dispatcher?.BeginInvoke(todo);
-
             }
-            catch
+            catch(Exception e)
             {
+                DebugLogWindow.AppendLog("Error Dispatcher",e.Message);
             }
         }
 

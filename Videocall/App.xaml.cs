@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Xml.Linq;
 
 namespace Videocall
 {
@@ -31,13 +32,15 @@ namespace Videocall
             Instance = this;
             base.OnStartup(e);
 
-            MainWindow = new VideoCallWindow();
+            MainWindow = new MainWindow();
 
             MainWindow.Closing += MainWindow_Closing;
             _notifyIcon = new System.Windows.Forms.NotifyIcon();
             _notifyIcon.DoubleClick += (s, args) => ShowMainWindow_();
-
-            _notifyIcon.Icon = new Icon("favicon2.ico");//new System.Drawing.Icon("favicon2.ico");
+            var iconStream=Application.GetResourceStream
+                (new Uri("pack://application:,,,/Videocall;component/Resources/favicon2.ico")).Stream;
+           
+            _notifyIcon.Icon =  new System.Drawing.Icon(iconStream);//new Icon("Resources/favicon2.ico");//new System.Drawing.Icon("favicon2.ico");
             _notifyIcon.Visible = true;
 
             CreateContextMenu();

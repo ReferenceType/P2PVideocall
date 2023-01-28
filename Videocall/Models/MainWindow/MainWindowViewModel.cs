@@ -42,34 +42,48 @@ public class MainWindowViewModel : PropertyNotifyBase
 
 
     private double canvasColumn=2;
-    public double CanvasColumn { get => canvasColumn; set { canvasColumn = value; OnPropertyChanged(); } }
+    public double CanvasColumn { get => canvasColumn; 
+        set { canvasColumn = value; OnPropertyChanged(); } }
 
     private double chatColumn = -1;
-    public double ChatColumn { get => chatColumn; set { chatColumn = value; OnPropertyChanged(); } }
+    public double ChatColumn { get => chatColumn; 
+        set { chatColumn = value; OnPropertyChanged(); } }
 
-    public string ChatText { get => chatText; set { chatText = value; OnPropertyChanged(); } }
-    public string ChatInputText { get => chatInputText; set { chatInputText = value; OnPropertyChanged(); } }
+    public string ChatText { get => chatText; 
+        set { chatText = value; OnPropertyChanged(); } }
+    public string ChatInputText { get => chatInputText; 
+        set { chatInputText = value; OnPropertyChanged(); } }
 
-    public string FTProgressText { get => fTProgressText; set { fTProgressText = value; OnPropertyChanged(); } }
-    public bool CameraChecked { get => cameraChecked; set { cameraChecked = value; HandleCamChecked(value); OnPropertyChanged(); } }
+    public string FTProgressText { get => fTProgressText; 
+        set { fTProgressText = value; OnPropertyChanged(); } }
+    public bool CameraChecked { get => cameraChecked; 
+        set { cameraChecked = value; HandleCamChecked(value); OnPropertyChanged(); } }
 
   
-    public bool MicroponeChecked { get => microponeChecked; set { microponeChecked = value; HandleMicChecked(value); OnPropertyChanged(); } }
+    public bool MicroponeChecked { get => microponeChecked; 
+        set { microponeChecked = value; HandleMicChecked(value); OnPropertyChanged(); } }
 
     
-    public ObservableCollection<PeerInfo> PeerInfos { get; set; } = new ObservableCollection<PeerInfo>();
+    public ObservableCollection<PeerInfo> PeerInfos { get; set; }
+        = new ObservableCollection<PeerInfo>();
 
-    public ObservableCollection<ChatDataModel> ChatData { get; set; } = new ObservableCollection<ChatDataModel>();
+    public ObservableCollection<ChatDataModel> ChatData { get; set; } 
+        = new ObservableCollection<ChatDataModel>();
 
     private PeerInfo selectedPeer = null;
-    public PeerInfo SelectedItem { get => selectedPeer; set { selectedPeer = value; OnPropertyChanged(); } }
+    public PeerInfo SelectedItem { get => selectedPeer; 
+        set { selectedPeer = value; OnPropertyChanged(); } }
 
-    public bool EndCallVisibility { get => endCallVisibility; set { endCallVisibility = value; OnPropertyChanged(); } }
+    public bool EndCallVisibility { get => endCallVisibility; 
+        set { endCallVisibility = value; OnPropertyChanged(); } }
 
-    public double WindowWidth { get => windowWidth; set { windowWidth = value; OnPropertyChanged(); } }
-    public double WindowHeight { get => windowHeight; set { windowHeight = value; OnPropertyChanged(); } }
+    public double WindowWidth { get => windowWidth; 
+        set { windowWidth = value; OnPropertyChanged(); } }
+    public double WindowHeight { get => windowHeight; 
+        set { windowHeight = value; OnPropertyChanged(); } }
 
-    public bool ShareScreenChecked { get => shareScreenChecked; set { shareScreenChecked = value; HandleShareScreenChecked(value); OnPropertyChanged(); } }
+    public bool ShareScreenChecked { get => shareScreenChecked; 
+        set { shareScreenChecked = value; HandleShareScreenChecked(value); OnPropertyChanged(); } }
 
     public bool WindowsActive { get; internal set; }
 
@@ -179,14 +193,6 @@ public class MainWindowViewModel : PropertyNotifyBase
         return chatData;
     }
    
-
-   
-
-    //private void WriteInfoChat(string message)
-    //{
-
-    //}
-
     public void WriteRemoteChat(string sender,string message)
     {
         DispatcherRun(() => {

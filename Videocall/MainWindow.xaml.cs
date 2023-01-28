@@ -1,40 +1,24 @@
-﻿
+﻿using NetworkLibrary.Utils;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using Protobuff;
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO.Compression;
-using System.Linq;
-using System.Net.Http;
-using System.Reflection;
-using System.Security.Policy;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using Videocall.Services.HttpProxy;
 using Videocall.Services.Latency;
 using Videocall.Services.ScreenShare;
 using Videocall.Settings;
-using Windows.ApplicationModel;
-using Windows.Media.Protection.PlayReady;
-using Windows.UI.Xaml.Media.Imaging;
+
 
 namespace Videocall
 {
     
-    public partial class VideoCallWindow : System.Windows.Window
+    public partial class MainWindow : System.Windows.Window
     {
         public SettingsViewModel SettingsViewModel { get; set; }
         public MainWindowViewModel MainWindowViewModel { get; set; }
@@ -55,23 +39,25 @@ namespace Videocall
         private System.Windows.Forms.NotifyIcon _notifyIcon;
 
         // DebugLogWindow debugwindow =  new DebugLogWindow();
-        public VideoCallWindow()
+        public MainWindow()
         {
+            InitializeComponent();
+
             AudioHandler =  new AudioHandler();
             VideoHandler = new VideoHandler();
             FileShare =  new FileShare();
             MessageHandler= new MessageHandler();
             LatencyPublisher = new LatencyPublisher(MessageHandler);
-
-            AudioHandler.StartMic();
+            MiniLogger.AllLog += (string s) => DebugLogWindow.AppendLog("any",s);
+            //AudioHandler.StartMic();
             AudioHandler.StartSpeakers();
 
             ServiceHub hub = new ServiceHub(AudioHandler, VideoHandler, MessageHandler, FileShare,LatencyPublisher, ScreenShareHandler);
 
             MainWindowViewModel = new MainWindowViewModel(hub);
             MainWindowViewModel.SrollToEndChatWindow += () => {
-                ChatView.SelectedIndex = ChatView.Items.Count==0?0: ChatView.Items.Count - 1;
-                ChatView.ScrollIntoView (ChatView.SelectedItem);
+                ChatView.SelectedIndex = ChatView.Items.Count == 0?0: ChatView.Items.Count - 1;
+                ChatView.ScrollIntoView(ChatView.SelectedItem);
                 
             };
             SettingsViewModel = new SettingsViewModel(hub);
@@ -80,47 +66,21 @@ namespace Videocall
             cameraWindow.DataContext = MainWindowViewModel;
 
             //MainWindowViewModel.MicroponeChecked = true;
+            HandleScreenshare();
 
-            InitializeComponent();
             var chr = new WindowChrome();
             chr.ResizeBorderThickness=new Thickness(10,10,10,10);
             WindowChrome.SetWindowChrome(this,chr );
-
 
             AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_ProcessExit;
             Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
             Application.Current.Exit += Current_Exit;
+
             Task.Run(async () => { await Task.Delay(50); DispatcherRun(() => CameraButton.IsChecked = true); });
             Task.Run(async () => { await Task.Delay(50); DispatcherRun(() => SoundButton.IsChecked = true); });
-            ScreenShareHandler.ImageAvailable += (bytes,mat) =>
-            {
-                var env = new MessageEnvelope();
-                env.Header = "ScreenShareImage";
-                env.Payload = bytes;
-                MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), env);
 
-                DispatcherRun(()=> MainWindowViewModel.SecondaryCanvasSource = mat.ToBitmapSource());
-
-            };
-
-            MessageHandler.OnMessageAvailable += (message) =>
-            {
-                if (message.Header == "ScreenShareImage")
-                {
-                    ScreenShareHandler.HandleNetworkImageBytes(message.Payload);
-                }
-            };
-
-            ScreenShareHandler.ImageReceived += (mat) =>
-            {
-                DispatcherRun(() =>
-                {
-                    MainWindowViewModel.PrimaryCanvasSource = mat.ToBitmapSource();
-
-                });
-            };
-
+         
             Task.Run(async() => { await Task.Delay(1000); scrollActive = true; });
             CallStateManager.StaticPropertyChanged += OnCallStateChanged;
             ChatHideButton.Visibility = Visibility.Hidden;
@@ -128,7 +88,71 @@ namespace Videocall
             CamGridColumn.Width = new GridLength(0, GridUnitType.Star);
         }
 
-      
+        private void HandleScreenshare()
+        {
+            ScreenShareHandler.LocalImageAvailable += (bytes, image) =>
+            {
+                var env = new MessageEnvelope();
+                env.Header = "ScreenShareImage";
+                env.Payload = bytes;
+                MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), env);
+
+                DispatcherRun(() => {
+
+                    if (MainWindowViewModel.SecondaryCanvasSource == null
+                      || image.Width != MainWindowViewModel.SecondaryCanvasSource.Width
+                      || image.Height != MainWindowViewModel.SecondaryCanvasSource.Height)
+                        MainWindowViewModel.SecondaryCanvasSource = image.ToBitmapSource();
+                    else
+                    {
+                        var dst = (System.Windows.Media.Imaging.WriteableBitmap)MainWindowViewModel.SecondaryCanvasSource;
+                        dst.Lock();
+                        int width = image.Width;
+                        int height = image.Height;
+                        int step = (int)image.Step();
+                        long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
+
+                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
+                        dst.Unlock();
+                        image.Dispose();
+                    }
+                });
+
+            };
+
+            MessageHandler.OnMessageAvailable += (message) =>
+            {
+                if (message.Header == "ScreenShareImage")
+                {
+                    ScreenShareHandler.HandleNetworkImageBytes(message.Payload, message.PayloadOffset, message.PayloadCount);
+                }
+            };
+
+            ScreenShareHandler.RemoteImageAvailable += (image) =>
+            {
+                DispatcherRun(() =>
+                {
+                    if (MainWindowViewModel.PrimaryCanvasSource == null
+                    || image.Width != MainWindowViewModel.PrimaryCanvasSource.Width
+                    || image.Height != MainWindowViewModel.PrimaryCanvasSource.Height)
+                        MainWindowViewModel.PrimaryCanvasSource = image.ToBitmapSource();
+                    else
+                    {
+                        var dst = (System.Windows.Media.Imaging.WriteableBitmap)MainWindowViewModel.PrimaryCanvasSource;
+                        dst.Lock();
+                        int width = image.Width;
+                        int height = image.Height;
+                        int step = (int)image.Step();
+                        long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
+
+                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
+                        dst.Unlock();
+                        image.Dispose();
+                    }
+
+                });
+            };
+        }
 
         private void DispatcherRun(Action todo)
         {
@@ -137,8 +161,9 @@ namespace Videocall
                 Application.Current?.Dispatcher?.BeginInvoke(todo);
 
             }
-            catch
+            catch(Exception e )
             {
+                DebugLogWindow.AppendLog("Error Dispatcher", e.Message);
             }
         }
 
@@ -159,8 +184,6 @@ namespace Videocall
                 // Note that you can have more than one file.
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 MainWindowViewModel.HandleDrop(files);
-
-
             }
         }
 
@@ -195,23 +218,9 @@ namespace Videocall
             {
                 case WindowState.Maximized:
                     this.BorderThickness = new System.Windows.Thickness(5);
-                   // cameraWindow.Hide();
-
-                    break;
-                case WindowState.Minimized:
-                    if (CallStateManager.GetState() == CallStateManager.CallState.OnCall)
-                    {
-                        //cameraWindow.Show();
-                        //if (cameraWindow.Owner == null)
-                        //    cameraWindow.Owner = this;
-                    }
-                        
-
                     break;
                 case WindowState.Normal:
                     this.BorderThickness = new System.Windows.Thickness(1);
-                   // cameraWindow.Hide();
-
                     break;
             }
         }
@@ -239,104 +248,6 @@ namespace Videocall
 
         }
 
-
-        #region Drag move functionality
-        /*
-         *  MouseMove="Window_MouseMove"
-        MouseLeftButtonDown="Window_MouseLeftButtonDown"
-        MouseLeftButtonUp="Window_MouseLeftButtonUp"
-         */
-        private void Window_MouseMove(object sender, MouseEventArgs e)
-        {
-            if (restoreForDragMove)
-            {
-                restoreForDragMove = false;
-                var pos = e.MouseDevice.GetPosition(this);
-                var point = PointToScreen(pos);
-
-                double percantageX = pos.X / Width;
-                double percantageY = pos.Y / Height;
-                Left = pos.X - RestoreBounds.Width*percantageX;
-                Top = pos.Y - RestoreBounds.Height*percantageY;
-
-                WindowState = WindowState.Normal;
-                DragMove();
-                //DispatcherRun(async () => { await Task.Delay(1000); DragMove(); }); 
-            }
-        }
-
-        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            if (e.ClickCount == 2)
-            {
-                if (ResizeMode != ResizeMode.CanResize &&
-                    ResizeMode != ResizeMode.CanResizeWithGrip)
-                {
-                    return;
-                }
-
-                WindowState = WindowState == WindowState.Maximized
-                    ? WindowState.Normal
-                    : WindowState.Maximized;
-            }
-            else
-            {
-                restoreForDragMove = WindowState == WindowState.Maximized;
-                DragMove();
-            }
-        }
-
-        private void Window_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            restoreForDragMove = false;
-
-        }
-        #endregion
-
-        #endregion
-
-        private void ShowDebugWindow(object sender, RoutedEventArgs e)
-        {
-            if(!DebugLogWindow.Instance.IsVisible)
-                DebugLogWindow.Instance.Show();
-            else
-                DebugLogWindow.Instance.Hide();
-
-        }
-
-       
-
-        private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
-        {
-            string uriStr = e.Uri.ToString();
-            if (!uriStr.StartsWith("http://", StringComparison.OrdinalIgnoreCase) 
-                && !uriStr.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                uriStr = "http://" + uriStr;
-
-            var sInfo = new System.Diagnostics.ProcessStartInfo(uriStr)
-            {
-                UseShellExecute = true,
-            };
-            try
-            {
-                Process.Start(sInfo);
-                this.Topmost = false;
-
-            }
-            catch { }
-        }
-
-        private void ChatMessageBox_GotFocus(object sender, RoutedEventArgs e)
-        {
-            WriteMsgGhostText.Opacity = 0;
-        }
-
-        private void ChatMessageBox_LostFocus(object sender, RoutedEventArgs e)
-        {
-            WriteMsgGhostText.Opacity = 1;
-
-        }
-
         private void Window_Deactivated(object sender, EventArgs e)
         {
             MainWindowViewModel.WindowsActive = false;
@@ -356,15 +267,61 @@ namespace Videocall
             cameraWindow.Hide();
         }
 
-        private bool scrollActive;
+        #endregion
 
-        // pain train
+        private void ShowDebugWindow(object sender, RoutedEventArgs e)
+        {
+            if(!DebugLogWindow.Instance.IsVisible)
+                DebugLogWindow.Instance.Show();
+            else
+                DebugLogWindow.Instance.Hide();
+
+        }
+
+        private void OnHyperlinkClicked(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            string uriStr = e.Uri.ToString();
+            if (!uriStr.StartsWith("http://", StringComparison.OrdinalIgnoreCase) 
+                && !uriStr.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                uriStr = "http://" + uriStr;
+
+            var sInfo = new System.Diagnostics.ProcessStartInfo(uriStr)
+            {
+                UseShellExecute = true,
+            };
+            try
+            {
+                Process.Start(sInfo);
+                this.Topmost = false;
+            }
+            catch { }
+        }
+
+
+        #region Chat window 
+        private void ChatMessageBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            WriteMsgGhostText.Opacity = 0;
+        }
+
+        private void ChatMessageBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            WriteMsgGhostText.Opacity = 1;
+
+        }
+
+        // pain train, this autoloads the historical chat as you scroll up.
+        private bool scrollActive;
         private void ChatView_ScrollChanged(object sender, System.Windows.Controls.ScrollChangedEventArgs e)
         {
             if(!scrollActive) return;
 
             var off = e.VerticalOffset;
-            if (off == 0 )
+            if(off==0 && e.VerticalChange == 0 )
+            {
+                return;
+            }
+            if (off == 0)
             {
                 scrollActive = false;
                 Task.Run(async () => { await Task.Delay(600); scrollActive = true; });
@@ -391,6 +348,7 @@ namespace Videocall
             
            
         }
+        #endregion
 
         private void OnCallStateChanged(object sender, PropertyChangedEventArgs e)
         {
@@ -421,18 +379,18 @@ namespace Videocall
                     PeersHideButton.Visibility = Visibility.Hidden;
                     ChatGridColumn.MinWidth = 280;
                     PeersGridColumn.MinWidth = 200;
+                    ScreenShareHandler.StopCapture();
                 }
-
-
-
             });
         }
 
-        int chatViewState= 0;
-        int peersViewState= 0;
 
-        
 
+
+        #region Window hide expand region logic
+
+        int chatViewState = 0;
+        int peersViewState = 0;
         private void ChatHideButton_Click(object sender, RoutedEventArgs e)
         {
             switch (chatViewState)
@@ -484,7 +442,7 @@ namespace Videocall
                     PeersGridColumn.Width = new GridLength(0, GridUnitType.Pixel);
                     CamGridColumn.Width = new GridLength(2, GridUnitType.Star);
                     if(chatViewState==0)
-                        ChatGridColumn.Width = new GridLength(480, GridUnitType.Pixel);
+                        ChatGridColumn.Width = new GridLength(280, GridUnitType.Pixel);
 
 
                     peersViewState = 1;
@@ -505,11 +463,12 @@ namespace Videocall
                     break;
 
             }
-
-            
         }
-
-      
+        #endregion
+        private void Status_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            Status.ScrollToEnd();
+        }
     }
 
 }

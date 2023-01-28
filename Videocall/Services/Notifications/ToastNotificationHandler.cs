@@ -13,7 +13,8 @@ namespace Videocall
         public const string UserDoubleClicked = "doubleClicked";
         public const string NotificationTimeout = "timeout";
 
-        private static ConcurrentDictionary<string, TaskCompletionSource<string>> awaitingTasks = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
+        private static ConcurrentDictionary<string, TaskCompletionSource<string>> awaitingTasks
+            = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
         static AsyncToastNotificationHandler()
         {
             ToastNotificationManagerCompat.OnActivated += toastArgs =>
@@ -40,7 +41,7 @@ namespace Videocall
                 result = "timeout";
                 try
                 {
-                    // only on uwp so far.
+                    // only on uwp so far..
                     ToastNotificationManager.History.Remove(notificationId);
 
                 }
