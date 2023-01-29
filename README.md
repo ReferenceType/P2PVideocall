@@ -34,6 +34,10 @@ Chat is quite primitive and work in progress
 <img src="https://user-images.githubusercontent.com/109621184/215311518-d8d2dbd0-55de-4510-9040-3ab4feae183f.png" width=50% height=50%>
 <img src="https://user-images.githubusercontent.com/109621184/215311576-72bdbc93-b85e-4781-8a75-1be976efe3d3.png" width=50% height=50%>
 
+### Share Screen
+- you can share a screen during a call. Image looks like inceptions because im sharing to myself.
+<img src="https://user-images.githubusercontent.com/109621184/215313213-d79025bc-7b7c-4075-bc07-eee562d99dcf.png" width=50% height=50%>
+
 ### Settings
 - Proviced varoious settings and displays for visualising whats going on. 
 <img src="https://user-images.githubusercontent.com/109621184/215311656-7389395a-33ea-4413-b464-f486f5437594.png" width=50% height=50%>
@@ -51,6 +55,7 @@ Chat is quite primitive and work in progress
 ### Toast Notification
 - Various windows toast notifications are implemented to notify user. They are similar to skype
 <img src="https://user-images.githubusercontent.com/109621184/215311924-bbc95e0f-989b-4c99-83c5-a2946444f67c.png" width=50% height=50%>
+
 
 
 
