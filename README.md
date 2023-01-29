@@ -19,7 +19,7 @@ Tested and achieved stable calls between 1.204,5 km distance clients
 Each application is a Peer client to a Relay Server. This server is used for randezvous point for Udp Holepunching. 
 If holepunch is sucessfull all Udp data is send directly among peers.
 All TCP data goes through the relay server there is no hole punching for that yet. 
-Relay server can be found on repository: https://github.com/ReferenceType/RelayServerTest
+Relay server can be found on repository: https://github.com/ReferenceType/RelayServer
 
 The back-end network core libraries are located on : https://github.com/ReferenceType/StandardNetworkLibrary
 ## How to setup
