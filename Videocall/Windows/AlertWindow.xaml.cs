@@ -40,7 +40,7 @@ namespace Videocall
         public AlertWindow()
         {
            this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            InitializeComponent();
+           InitializeComponent();
         }
 
         private void CloseButtonClicked(object sender, RoutedEventArgs e)

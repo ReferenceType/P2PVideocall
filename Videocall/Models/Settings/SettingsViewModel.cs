@@ -20,8 +20,9 @@ namespace Videocall.Settings
         public ICommand ClearChatHistoryCommand { get; }
 
 
-        private ComboBoxItem transportLayer;
-        private ComboBoxItem compressionFormat;
+        private ComboBoxItem transportLayer =  new ComboBoxItem();
+        private ComboBoxItem compressionFormat = new ComboBoxItem();
+        
         private string logText;
 
         private string tcpLatency;
@@ -34,6 +35,8 @@ namespace Videocall.Settings
         private double actualImageQuality;
         private double volumeValue = 3;
         private double bufferDurationValue = 200;
+        private bool enableCongestionControl = true;
+
 
         private int bufferedDurationPercentage;
 
@@ -163,6 +166,12 @@ namespace Videocall.Settings
 
         public string AverageLatency { get => averageLatency; private set { averageLatency = value; OnPropertyChanged(); } }
 
+        public bool EnableCongestionControl
+        {
+            get => enableCongestionControl;
+            set { enableCongestionControl = value; OnPropertyChanged(); services.VideoHandler.EnableCongestionControl = value; }
+        }
+
         //public bool AutoReconnect { get; set; } = true;
         //public bool AutoHolepunch { get; set; } = true;
 
@@ -184,6 +193,7 @@ namespace Videocall.Settings
             services.VideoHandler.QualityAutoAdjusted += (value) => ActualImageQuality = value;
             services.VideoHandler.SendRatePublished += (value) => ImageTransferRate = "Transfer Rate: " + value.ToString("N2") + " Kb/s";
             services.VideoHandler.AverageLatencyPublished += (value) => AverageLatency ="Average Latency: " +value.ToString("N1") +" ms";
+            services.VideoHandler.EnableCongestionControl = enableCongestionControl;
 
             HandleConnectRequest(null);
             MainWindowEventAggregator.Instance.PeerRegistered+= OnPeerRegistered;
@@ -298,7 +308,7 @@ namespace Videocall.Settings
             holePunchRequestActive = true;
             try
             {
-                foreach (var peerId in services.MessageHandler.registeredPeers)
+                foreach (var peerId in services.MessageHandler.registeredPeers.Keys)
                 {
                     try
                     {
@@ -351,7 +361,7 @@ namespace Videocall.Settings
 
         private void HandleSenddoubleAudioChecked(bool value)
         {
-            services.AudioHandler.SendTwice = value;
+            services.AudioHandler.SendMultiStream = value;
 
         }
 

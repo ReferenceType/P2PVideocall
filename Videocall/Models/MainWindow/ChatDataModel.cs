@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Forms;
 
 namespace Videocall.Models.MainWindow
 {
@@ -29,6 +30,9 @@ namespace Videocall.Models.MainWindow
         {
             if (IsValidURL(message))
             {
+                if (!message.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                    && !message.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    message = "http://" + message;
                 URI = message;
             }
             else
@@ -47,6 +51,9 @@ namespace Videocall.Models.MainWindow
         {
             if (IsValidURL(message))
             {
+                if (!message.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                    && !message.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    message = "http://" + message;
                 URI = message;
             }
             else
@@ -60,8 +67,11 @@ namespace Videocall.Models.MainWindow
             BackgroundColor = System.Windows.Media.Color.FromRgb(35, 35, 42);
         }
 
-        public void CreateInfoChatEntry(string info)
+        public void CreateInfoChatEntry(string info,string url = null)
         {
+           
+            URI = url;
+          
             Message = info;
             Time = DateTime.Now.ToShortTimeString();
             Allignment = "Center";

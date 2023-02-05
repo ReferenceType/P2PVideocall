@@ -42,9 +42,9 @@ namespace Videocall
         public Action<double> AverageLatencyPublished;
 
         public int captureRateMs = 50;
-        public int CompressionLevel = 83;
+        private int compressionLevel = 83;
         private int compressionLevel_ = 83;
-
+        public bool EnableCongestionControl { get; set; } = false;
         public int VideoLatency { get; internal set; } = 200;
         public int AudioBufferLatency { get; internal set; } = 0;
         public double AverageLatency { get; private set; } = -1;
@@ -58,6 +58,9 @@ namespace Videocall
                 avgDivider = 2;
             }
         }
+
+        public int CompressionLevel { get => compressionLevel; 
+            set { compressionLevel = value; compressionLevel_ = value; QualityAutoAdjusted?.Invoke(value); } }
 
         private double DeviationRtt = 0;
 
@@ -77,6 +80,7 @@ namespace Videocall
 
         public VideoHandler()
         {
+            QualityAutoAdjusted?.Invoke(compressionLevel_);
             // statistics
             Task.Run(async () =>
             {
@@ -146,7 +150,7 @@ namespace Videocall
                     return;
 
             }
-           
+            QualityAutoAdjusted?.Invoke(compressionLevel_);
             Thread t = new Thread(() =>
             {
                 try
@@ -164,13 +168,13 @@ namespace Videocall
                         {
                             extention = ".webp";
                             param = new ImageEncodingParam[1];
-                            param[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(10, 95, compressionLevel_));
+                            param[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(40, 95, compressionLevel_));
                         }
                         else 
                         {
                             extention = ".jpg";
                             param = new ImageEncodingParam[2];
-                            param[0] = new ImageEncodingParam(ImwriteFlags.JpegQuality, Clamp(10, 95, compressionLevel_));
+                            param[0] = new ImageEncodingParam(ImwriteFlags.JpegQuality, Clamp(40, 95, compressionLevel_));
                             param[1] = new ImageEncodingParam(ImwriteFlags.JpegOptimize, 1);
                         }
                         
@@ -262,16 +266,6 @@ namespace Videocall
             AverageLatency = (avgDivider * AverageLatency + currentLatency) / (avgDivider + 1);
             avgDivider++;
 
-            //tried here exponentially weighted moving average(EWMA)
-            //AverageLatency = (0.875 * AverageLatency) + (0.125 * currentLatency);
-            //DeviationRtt = 0.75 * DeviationRtt + 0.25 * Math.Abs(AverageLatency - currentLatency);
-            //Console.WriteLine(DeviationRtt);
-            //if (currentLatency < AverageLatency && DeviationRtt > 0.3)
-            //    BumpQuality(1);
-            //else if (currentLatency > AverageLatency && DeviationRtt > 0.4)
-            //    RecuceQuality(1);
-
-
             AverageLatencyPublished?.Invoke(AverageLatency);
             // check for lost packets
             if (timeDict.Count>0)
@@ -297,9 +291,11 @@ namespace Videocall
 
         private void RecuceQuality(int reduction = 5)
         {
+            if(!EnableCongestionControl) return;
+
             int old = compressionLevel_;
             int compressionTarget = compressionLevel_ - reduction;
-            compressionLevel_ = Math.Max(10, compressionTarget);
+            compressionLevel_ = Math.Max(40, compressionTarget);
 
             if (old != compressionLevel_)
                 QualityAutoAdjusted?.Invoke(compressionLevel_);
@@ -307,6 +303,8 @@ namespace Videocall
 
         private void BumpQuality(int bump = 5)
         {
+            if (!EnableCongestionControl) return;
+
             int old = compressionLevel_;
             var compressionTarget = compressionLevel_ + bump;
             compressionLevel_ = Math.Min(CompressionLevel, compressionTarget);

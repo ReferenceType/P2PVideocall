@@ -5,6 +5,8 @@ using Protobuff;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -72,8 +74,8 @@ namespace Videocall
             chr.ResizeBorderThickness=new Thickness(10,10,10,10);
             WindowChrome.SetWindowChrome(this,chr );
 
-            AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_ProcessExit;
+            AppDomain.CurrentDomain.ProcessExit += (a, b) => Environment.Exit(0);
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomainUnhandledException;
             Application.Current.DispatcherUnhandledException += Current_DispatcherUnhandledException;
             Application.Current.Exit += Current_Exit;
 
@@ -196,11 +198,19 @@ namespace Videocall
 
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
+            //string ex = e.Exception.Message + e.Exception.StackTrace;
+            //string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            //File.AppendAllText(workingDir + "/CrashDump.txt", ex);
             Environment.Exit(0);
         }
 
-        private void CurrentDomain_ProcessExit(object sender, EventArgs e)
+        private void CurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            string ex = ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
+            string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            File.AppendAllText(workingDir + "/CrashDump.txt", ex);
+            MessageHandler.client.Disconnect();
+
             VideoHandler.CloseCamera();
         }
 
@@ -281,20 +291,32 @@ namespace Videocall
         private void OnHyperlinkClicked(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
         {
             string uriStr = e.Uri.ToString();
-            if (!uriStr.StartsWith("http://", StringComparison.OrdinalIgnoreCase) 
-                && !uriStr.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                uriStr = "http://" + uriStr;
-
-            var sInfo = new System.Diagnostics.ProcessStartInfo(uriStr)
+            
+            if (uriStr.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || uriStr.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                UseShellExecute = true,
-            };
-            try
-            {
-                Process.Start(sInfo);
-                this.Topmost = false;
+                var sInfo = new System.Diagnostics.ProcessStartInfo(uriStr)
+                {
+                    UseShellExecute = true,
+                };
+                try
+                {
+                    Process.Start(sInfo);
+                    this.Topmost = false;
+                }
+                catch { }
             }
-            catch { }
+            else
+            {
+                string argument = "/select, \"" + uriStr + "\"";
+                try
+                {
+                    Process.Start("explorer.exe", argument);
+                }
+                catch { }
+            }
+          
+            
         }
 
 

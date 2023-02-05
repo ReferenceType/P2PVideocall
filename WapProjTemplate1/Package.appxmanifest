@@ -12,7 +12,7 @@
   <Identity
     Name="74ef5df9-b762-4553-a72e-58beb01a3437"
     Publisher="CN=dcano"
-    Version="1.0.1.0" />
+    Version="1.0.3.0" />
 
   <Properties>
     <DisplayName>WapProjTemplate1</DisplayName>

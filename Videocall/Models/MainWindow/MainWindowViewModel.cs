@@ -221,11 +221,11 @@ public class MainWindowViewModel : PropertyNotifyBase
         }
         return chatData;
     }
-    public void WriteInfoEntry(string entry)
+    public void WriteInfoEntry(string entry, string url = null)
     {
         DispatcherRun(() => {
             ChatDataModel chatData = new ChatDataModel();
-            chatData.CreateInfoChatEntry( entry);
+            chatData.CreateInfoChatEntry( entry, url);
             ChatData.Add(chatData);
             SrollToEndChatWindow?.Invoke();
 

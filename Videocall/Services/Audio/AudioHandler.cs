@@ -36,12 +36,13 @@ namespace Videocall
     internal class AudioHandler
     {
         public Action<AudioSample> OnAudioAvailable;
+        public Action<AudioSample> OnAudioAvailableDelayed;
         public Action<AudioStatistics> OnStatisticsAvailable;
 
         private WaveOutEvent player;
         private BufferedWaveProvider soundListenBuffer;
         private WaveInEvent waveIn;
-        private WaveFormat format = new WaveFormat(16000, 16, 1);
+        private WaveFormat format = new WaveFormat(32000, 16, 1);
         private VolumeSampleProvider volumeSampleProvider;
         private Queue<AudioSample> delayedSamples =  new Queue<AudioSample>();
         private ConcurrentProtoSerialiser serialiser = new ConcurrentProtoSerialiser();
@@ -51,7 +52,7 @@ namespace Videocall
         private int lastLostPackckageAmount = 0;
 
         private JitterBuffer jitterBuffer;
-        public bool SendTwice = false;
+        public bool SendMultiStream = false;
 
         private int bufferLatency = 200;
         public int BufferLatency { get => bufferLatency; 
@@ -142,13 +143,13 @@ namespace Videocall
                     ProcessAudio(sample);
 
                 OnAudioAvailable?.Invoke(sample);
-                if (SendTwice )
+                if (SendMultiStream)
                 {
                     delayedSamples.Enqueue(sample);
-                    if(delayedSamples.Count > 5)
+                    if(delayedSamples.Count > (BufferLatency/20))
                     {
                         var sampleOld = delayedSamples.Dequeue();
-                        OnAudioAvailable?.Invoke(sampleOld);
+                        OnAudioAvailableDelayed?.Invoke(sampleOld);
                     }
                    
                 }

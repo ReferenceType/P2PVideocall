@@ -2,6 +2,7 @@
 using Protobuff;
 using Protobuff.P2P;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -29,7 +30,7 @@ namespace Videocall
        
 
         public RelayClient client;
-        public HashSet<Guid> registeredPeers = new HashSet<Guid>();
+        public ConcurrentDictionary<Guid,bool> registeredPeers = new ConcurrentDictionary<Guid,bool>();
         public Action<MessageEnvelope> OnMessageAvailable;
         internal ConcurrentProtoSerialiser Serializer =  new ConcurrentProtoSerialiser();
 
@@ -51,13 +52,13 @@ namespace Videocall
 
         private void HandlePeerUnregistered(Guid obj)
         {
-            registeredPeers.Remove(obj);
+            registeredPeers.TryRemove(obj,out _);
 
         }
 
         private void HandlePeerRegistered(Guid id)
         {
-           registeredPeers.Add(id);
+           registeredPeers.TryAdd(id,true);
             Console.WriteLine("Peer Registered");
         }
 
@@ -78,7 +79,7 @@ namespace Videocall
           
         }
 
-       internal void SendStreamMessage<T>(Guid id, T message) where T : IProtoMessage
+       internal void SendStreamMessage<T>(Guid id, T message, int channel = 0) where T : IProtoMessage
         {
             if (TransportLayer == "Udp")
                 client.SendUdpMesssage(id, message,channel:1);
@@ -86,7 +87,7 @@ namespace Videocall
             else
                 client.SendAsyncMessage(id, message);
         }
-        internal void SendStreamMessage(Guid id, MessageEnvelope message) 
+        internal void SendStreamMessage(Guid id, MessageEnvelope message, int channel = 0) 
         {
             if (TransportLayer == "Udp")
                 client.SendUdpMesssage(id, message);

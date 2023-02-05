@@ -44,6 +44,7 @@ internal class MainWindowModel
         services.MessageHandler.client.OnPeerUnregistered += HandlePeerUnregistered;
 
         services.AudioHandler.OnAudioAvailable += HandleMicrophoneAduio;
+        services.AudioHandler.OnAudioAvailableDelayed += HandleMicrophoneAduioSecondStream;
         services.LatencyPublisher.Latency += LatencyDataAvailable;
 
         CallStateManager.StaticPropertyChanged += CallStateChanged;
@@ -172,7 +173,7 @@ internal class MainWindowModel
         {
             try
             {
-                while (services.MessageHandler.registeredPeers.Contains(peerId))
+                while (services.MessageHandler.registeredPeers.ContainsKey(peerId))
                 {
                     MessageEnvelope env = new MessageEnvelope();
                     env.Header = MessageHeaders.Identify;
@@ -181,7 +182,7 @@ internal class MainWindowModel
                     {
                         if (response.KeyValuePairs == null)
                         {
-                            services.MessageHandler.registeredPeers.Remove(peerId);
+                            services.MessageHandler.registeredPeers.TryRemove(peerId,out _);
                             return;
                         }
 
@@ -211,8 +212,7 @@ internal class MainWindowModel
             catch (Exception ex)
             {
                 DebugLogWindow.AppendLog("Error", ex.Message);
-                services.MessageHandler.registeredPeers.Remove(peerId);
-
+                services.MessageHandler.registeredPeers.TryRemove(peerId, out _);
             }
 
         });
@@ -262,7 +262,7 @@ internal class MainWindowModel
                 {
                     var fileData = fileDatas[i];
                     fileData.ReadBytes();
-
+                    // this one is to calculate hash during transfer progressively, i do it before so i commented this.
                     //if (fileData.IsLast)
                     //{
                     //    md5.TransformFinalBlock(fileData.Data, fileData.dataBufferOffset, fileData.count);
@@ -334,7 +334,7 @@ internal class MainWindowModel
             else
                 name += tree.FileStructure.Values.First().First();
 
-            mainWindowViewModel.WriteInfoEntry("Transfer Complete: " + tree.seed + name + " in " + sw.Elapsed.ToString());
+            mainWindowViewModel.WriteInfoEntry("Transfer Complete in " + sw.Elapsed.ToString(), tree.seed + name);
 
             var response = new MessageEnvelope();
             response.Header = "FTComplete";
@@ -377,7 +377,7 @@ internal class MainWindowModel
         }
         else
         {
-            mainWindowViewModel.WriteInfoEntry("Receive Complete " +
+            mainWindowViewModel.WriteInfoEntry("File Received",
                 Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + @"\Shared" + message.KeyValuePairs.Keys.First());
             DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
         }
@@ -524,11 +524,18 @@ internal class MainWindowModel
     #endregion
 
     #region Sound
-    private void HandleMicrophoneAduio(AudioSample obj)
+    private void HandleMicrophoneAduio(AudioSample sample)
     {
         if (CallStateManager.GetState() == CallStateManager.CallState.OnCall &&
             mainWindowViewModel.MicroponeChecked)
-            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), obj);
+            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), sample, channel: 0);
+
+    }
+    private void HandleMicrophoneAduioSecondStream(AudioSample sample)
+    {
+        if (CallStateManager.GetState() == CallStateManager.CallState.OnCall &&
+            mainWindowViewModel.MicroponeChecked)
+            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), sample, channel: 1);
 
     }
 
@@ -563,7 +570,9 @@ internal class MainWindowModel
             if (info != null)
             {
                 CallStateManager.Calling();
-                var response = await services.MessageHandler.client.SendRequestAndWaitResponse(info.Guid, info, MessageHeaders.Call, 10000);
+                // todo MY INFO NOT SELECTED
+                var nfo = new PeerInfo(PersistentSettingConfig.Instance.Name,null,0, new Guid()); 
+                var response = await services.MessageHandler.client.SendRequestAndWaitResponse(info.Guid, nfo, MessageHeaders.Call, 10000);
                 if (response.Header != MessageEnvelope.RequestTimeout)
                     HandleCallResponse(response, info);
                 else
