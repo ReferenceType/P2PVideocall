@@ -1,4 +1,6 @@
-﻿using NetworkLibrary.Utils;
+﻿using MessageProtocol;
+using NetworkLibrary;
+using NetworkLibrary.Utils;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using Protobuff;
@@ -97,7 +99,7 @@ namespace Videocall
                 var env = new MessageEnvelope();
                 env.Header = "ScreenShareImage";
                 env.Payload = bytes;
-                MessageHandler.client.SendAsyncMessage(CallStateManager.GetCallerId(), env);
+                MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env,false);
 
                 DispatcherRun(() => {
 
@@ -209,7 +211,7 @@ namespace Videocall
             string ex = ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
             string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             File.AppendAllText(workingDir + "/CrashDump.txt", ex);
-            MessageHandler.client.Disconnect();
+            MessageHandler.Disconnect();
 
             VideoHandler.CloseCamera();
         }

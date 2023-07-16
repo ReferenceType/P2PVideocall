@@ -207,6 +207,7 @@ namespace Videocall
                     }
                     else
                         files.Add(new FileTransfer(filePath, ds.seed, 0, (int)fi.Length, 0, 1));
+                    // 
                     files.Last().ComputeHash();
 
                 };

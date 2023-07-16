@@ -1,5 +1,6 @@
 ﻿using NAudio.Wave;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Data;
@@ -15,7 +16,7 @@ namespace Videocall
         public int NumLostPackages = 0;
         public int BufferLatency;
 
-        private Dictionary<DateTime,AudioSample> samples = new Dictionary<DateTime, AudioSample>();
+        private ConcurrentDictionary<DateTime,AudioSample> samples = new ConcurrentDictionary<DateTime, AudioSample>();
         private readonly object locker = new object();
         private MemoryStream sampleStream = new MemoryStream();
         private DateTime lastBatchTimeStamp = DateTime.Now;
@@ -36,51 +37,66 @@ namespace Videocall
                 while (true)
                 {
                     bufferFullEvent.WaitOne();
+                    KeyValuePair<DateTime, AudioSample>[] samplesOrdered_;
                     lock (locker)
                     {
-                        var samplesOrdered = samples.OrderByDescending(x => x.Key).Reverse();
-                        int toTake = Math.Min(2, numSeqBuffered) + (samplesOrdered.Count() - (BufferLatency / 20));
-                        samplesOrdered = samplesOrdered.Take(Math.Min(toTake, samplesOrdered.Count()));
-
-                        lastBatchTimeStamp = samplesOrdered.Last().Key;
-
-                        var sampArry = samplesOrdered.ToImmutableArray();
-                        for (int i = 0; i < sampArry.Length - 1; i++)
+                        samplesOrdered_ = samples.OrderByDescending(x => x.Key).Reverse().ToArray();
+                    }
+                    // iterate and count all consecutive sequences.
+                    int takeAmount = 0;
+                    for (int i = samplesOrdered_.Length - 1; i > 0; i--)
+                    {
+                        var curr = samplesOrdered_[i].Value.SquenceNumber;
+                        var next = samplesOrdered_[i -1].Value.SquenceNumber;
+                        if(Math.Abs(curr - next) == 1)
                         {
-                           
-                            if (sampArry[i].Value.SquenceNumber + 1 == sampArry[i + 1].Value.SquenceNumber)
+                            takeAmount++;
+                        }
+                    }
+                    //int toTake = Math.Min(2, numSeqBuffered) + (samplesOrdered_.Count() - (BufferLatency / 20));
+
+                    int toTake = Math.Max(2, takeAmount);
+                    var samplesOrdered = samplesOrdered_.Take(Math.Min(toTake, samplesOrdered_.Count()));
+
+                    lastBatchTimeStamp = samplesOrdered.Last().Key;
+
+                    var sampArry = samplesOrdered.ToImmutableArray();
+                    for (int i = 0; i < sampArry.Length - 1; i++)
+                    {
+
+                        if (sampArry[i].Value.SquenceNumber + 1 == sampArry[i + 1].Value.SquenceNumber)
+                        {
+                            sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
+                        }
+                        // lost packet we conceal them here
+                        else
+                        {
+                            int delta = sampArry[i + 1].Value.SquenceNumber - sampArry[i].Value.SquenceNumber;
+                            for (int j = 0; j < delta - 1; j++)
                             {
                                 sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
+                                NumLostPackages++;
                             }
-                            // lost packets we conceal them here
-                            else
-                            {
-                                int delta = sampArry[i + 1].Value.SquenceNumber - sampArry[i].Value.SquenceNumber;
-                                for (int j = 0; j < delta - 1; j++)
-                                {
-                                    sampleStream.Write(sampArry[i].Value.Data, 0, sampArry[i].Value.Data.Length);
-                                    NumLostPackages++;
-                                    Console.WriteLine("Drop");
-                                }
-
-
-                            }
-                            samples.Remove(sampArry[i].Key);
-                            numSeqBuffered--;
-
-                        }
-                       
-                        try
-                        {
-                            OnSamplesCollected?.Invoke(sampleStream.GetBuffer(), 0, (int)sampleStream.Position);
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(e.Message);
                         }
 
-                        sampleStream.Position = 0;
+                        lock (locker)
+                            samples.TryRemove(sampArry[i].Key,out _);
+
+                        numSeqBuffered--;
+
                     }
+                    
+                    try
+                    {
+                        OnSamplesCollected?.Invoke(sampleStream.GetBuffer(), 0, (int)sampleStream.Position);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+
+                    sampleStream.Position = 0;
+                    
 
                 }
             });
@@ -94,7 +110,7 @@ namespace Videocall
 
                 if (!samples.ContainsKey(sample.Timestamp) && sample.Timestamp > lastBatchTimeStamp)
                 {
-                    samples.Add(sample.Timestamp, sample);
+                    samples.TryAdd(sample.Timestamp, sample);
                     numSeqBuffered++;
                     if(numSeqBuffered >= BufferLatency/20)
                     {
@@ -114,7 +130,7 @@ namespace Videocall
 
                 foreach (var item in samplesOrdered)
                 {
-                    samples.Remove(item.Key);
+                    samples.TryRemove(item.Key, out _);
                     numSeqBuffered--;
 
                 }

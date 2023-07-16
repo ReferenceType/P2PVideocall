@@ -85,7 +85,7 @@ namespace Videocall
         public static bool CanSendCall() => currentState == CallState.Available;
         public static CallState GetState() => CallStateManager.currentState;
         public static Guid GetCallerId() => CallingWith;
-
+        public static bool IsOnACall =>currentState == CallState.OnCall;
         internal static void CallRejected() => currentState = CallState.Available;
     }
 }

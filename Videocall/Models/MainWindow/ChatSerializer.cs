@@ -147,7 +147,7 @@ namespace Videocall.Models.MainWindow
                             byte[] message = new byte[lenght];
                             streamData.Read(message, 0, message.Length);
 
-                            var msg = serializer.Deserialize<ChatSerializationData>(message);
+                            var msg = serializer.Deserialize<ChatSerializationData>(message,0,message.Length);
                             messages.Add(msg);
 
                             numMessages++;

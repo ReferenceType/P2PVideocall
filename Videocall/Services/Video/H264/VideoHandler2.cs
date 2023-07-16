@@ -1,22 +1,19 @@
 ﻿using NetworkLibrary;
 using OpenCvSharp;
-using OpenCvSharp.Extensions;
+using OpenH264Lib;
 using ProtoBuf;
-using Protobuff;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Text;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Videocall
+namespace Videocall.Services.Video.H264
 {
+
     [ProtoContract]
     class ImageMessage : IProtoMessage
     {
@@ -32,13 +29,10 @@ namespace Videocall
         Webp,
         Png
     }
-    internal class VideoHandler
+    internal class VideoHandler2
     {
-        //[DllImport("OpenCvSharpExtern", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        //public unsafe static extern IntPtr imgcodecs_imdecode_vector(byte* buf, IntPtr bufLength, int flags);
-
-        public Action<byte[], Mat> OnCameraImageAvailable;
-        public Action<Mat> OnNetworkFrameAvailable;
+        public Action<byte[], int> OnCameraImageAvailable;
+        public Action<Bitmap> OnNetworkFrameAvailable;
         public Action<int> QualityAutoAdjusted;
         public Action<float> SendRatePublished;
         public Action<double> AverageLatencyPublished;
@@ -73,7 +67,7 @@ namespace Videocall
 
         private VideoCapture capture;
 
-        private readonly ConcurrentDictionary<DateTime, Mat> frameQueue = new ConcurrentDictionary<DateTime, Mat>();
+        private readonly ConcurrentDictionary<DateTime, Bitmap> frameQueue = new ConcurrentDictionary<DateTime, Bitmap>();
         private readonly AutoResetEvent imgReady = new AutoResetEvent(false);
         private DateTime lastProcessedTimestamp = DateTime.Now;
         private CompressionType compressionType = CompressionType.Webp;
@@ -84,13 +78,18 @@ namespace Videocall
         private readonly ConcurrentDictionary<Guid, DateTime> timeDict = new ConcurrentDictionary<Guid, DateTime>();
         private bool paused = false;
         private bool captureRunning = false;
-        private object frameQlocker =  new object();
+        private object frameQlocker = new object();
         private int frameWidth = 640;
         private int frameHeight = 480;
         private bool adjustCamsize = false;
-        public VideoHandler()
+        private OpenH264Lib.Encoder encoder;
+        private OpenH264Lib.Decoder decoder;
+
+        public VideoHandler2()
         {
             QualityAutoAdjusted?.Invoke(compressionLevel_);
+            encoder = H264Transcoder.SetupEncoder(frameWidth, frameHeight, OnEncoded);
+            decoder = H264Transcoder.SetupDecoder();
             // statistics
             Task.Run(async () =>
             {
@@ -112,7 +111,7 @@ namespace Videocall
                     imgReady.WaitOne();
                     while (frameQueue.Count > (VideoLatency + AudioBufferLatency) / (1000 / frameRate))
                     {
-                        KeyValuePair<DateTime, Mat> lastFrame;// oldest
+                        KeyValuePair<DateTime, Bitmap> lastFrame;// oldest
                         lock (frameQlocker)
                         {
                             var samplesOrdered = frameQueue.OrderByDescending(x => x.Key);
@@ -135,19 +134,18 @@ namespace Videocall
             t.Start();
         }
 
+        private void OnEncoded(byte[] data, int length, OpenH264Lib.Encoder.FrameType keyFrame)
+        {
+            bytesSent += length;
+            OnCameraImageAvailable?.Invoke(data, length);
+        }
+
         public bool ObtainCamera()
         {
             if (capture != null && capture.IsOpened()) return true;
 
             capture = new VideoCapture(CaptureDevice.VFW, 0);
             capture.Open(0);
-            // capture.Set(CaptureProperty.Fps, 60);
-            //capture.FourCC = "YUY2";
-            //capture.Sharpness = 0;
-            //capture.Gain = 32;
-            //capture.Gamma = 1/2.2;
-            //capture.Saturation = 45;
-            //   capture.Fps = 60;
 
             capture.FrameWidth = frameWidth;
             capture.FrameHeight = frameHeight;
@@ -176,7 +174,7 @@ namespace Videocall
                     return;
 
             }
-            int i = 0;  
+            int i = 0;
             QualityAutoAdjusted?.Invoke(compressionLevel_);
             Thread t = new Thread(() =>
             {
@@ -187,24 +185,18 @@ namespace Videocall
                         Thread.Sleep(Math.Max(0, captureRateMs - 16));
                         if (paused)
                             continue;
-                        if (adjustCamsize)
-                        {
-                            capture.FrameHeight = frameHeight;
-                            capture.FrameWidth = frameWidth;
-                            frame =  new Mat();
-                            adjustCamsize = false;
-                        }
+
                         capture.Read(frame);
-                        
+
                         ImageEncodingParam[] param;
                         string extention = "";
-                        if (CompressionType == CompressionType.Webp)
-                        {
-                            extention = ".webp";
-                            param = new ImageEncodingParam[1];
-                            param[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(40, 95, compressionLevel_));
-                        }
-                        else
+                        //if (CompressionType == CompressionType.Webp)
+                        //{
+                        //    extention = ".webp";
+                        //    param = new ImageEncodingParam[1];
+                        //    param[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(40, 95, compressionLevel_));
+                        //}
+                        //else
                         {
                             extention = ".jpg";
                             param = new ImageEncodingParam[2];
@@ -217,21 +209,7 @@ namespace Videocall
                             var frameL = frame;
                             byte[] imageBytes;
                             imageBytes = frameL.ImEncode(ext: extention, param);
-                           // File.WriteAllBytes(@"C:\Users\dcano\Desktop\Frames\" + i+++".jpg", imageBytes);
-                            int imageByteSize = imageBytes.Length;
-                            bytesSent += imageByteSize;
-
-                            if (LimitPackageSize && imageByteSize > 62000)
-                            {
-                                compressionLevel_ -= 20;
-                                CompressionLevel--;
-                                QualityAutoAdjusted?.Invoke(compressionLevel_);
-
-                                return;
-                            }
-
-                            OnCameraImageAvailable?.Invoke(imageBytes, frameL);
-                            framePool.Add(frameL);
+                            encoder.Encode(imageBytes);
                         }
                         catch (Exception ex) { DebugLogWindow.AppendLog(" Capture encoding failed: ", ex.Message); };
                     }
@@ -254,24 +232,36 @@ namespace Videocall
             return val;
         }
 
-        internal void HandleIncomingImage(DateTime timeStamp, byte[] payload, int payloadOffset, int payloadCount)
+        internal unsafe void HandleIncomingImage(DateTime timeStamp, byte[] payload, int payloadOffset, int payloadCount)
         {
-            var buffa = BufferPool.RentBuffer(payloadCount);
-            Buffer.BlockCopy(payload, payloadOffset, buffa, 0, payloadCount);
+            fixed (byte* b = &payload[payloadOffset])
+            {
+                var bmp = decoder.Decode(b, payloadCount);
+                if (bmp != null)
+                {
+                    lock (frameQlocker)
+                        frameQueue[timeStamp] = bmp;
+                    imgReady.Set();
+                }
+            }
 
-            //ThreadPool.UnsafeQueueUserWorkItem((x) =>
-            //{
-            // var buff = (byte[])x;
-            var buff = buffa;
-                Mat img = new Mat(NativeMethods.imgcodecs_imdecode_vector(buff, new IntPtr(payloadCount), (int)ImreadModes.Color));
-                BufferPool.ReturnBuffer(buff);
 
-                lock(frameQlocker)
-                    frameQueue[timeStamp] = img;
+            //var buffa = BufferPool.RentBuffer(payloadCount);
+            //Buffer.BlockCopy(payload, payloadOffset, buffa, 0, payloadCount);
 
-                imgReady.Set();
-                Interlocked.Increment(ref frameCount);
-           // }, buffa);
+            ////ThreadPool.UnsafeQueueUserWorkItem((x) =>
+            ////{
+            //// var buff = (byte[])x;
+            //var buff = buffa;
+            //Mat img = new Mat(NativeMethods.imgcodecs_imdecode_vector(buff, new IntPtr(payloadCount), (int)ImreadModes.Color));
+            //BufferPool.ReturnBuffer(buff);
+
+            //lock (frameQlocker)
+            //    frameQueue[timeStamp] = img;
+
+            //imgReady.Set();
+            //Interlocked.Increment(ref frameCount);
+            //// }, buffa);
 
 
         }
@@ -366,11 +356,12 @@ namespace Videocall
 
         internal void ApplySettings(int camFrameWidth, int camFrameHeight)
         {
-            if(camFrameHeight == 0 || camFrameWidth == 0)
+            if (camFrameHeight == 0 || camFrameWidth == 0)
                 return;
             frameHeight = camFrameHeight;
-            frameWidth= camFrameWidth;
+            frameWidth = camFrameWidth;
             adjustCamsize = true;
         }
+
     }
 }

@@ -13,14 +13,19 @@ namespace Videocall.Settings
 {
     public class SettingsViewModel : PropertyNotifyBase
     {
+        private static SettingsViewModel instance;
+        public static SettingsViewModel Instance { get => instance;  }
+
         public ICommand ConnectButtonClickCommand { get; }
         public ICommand DisconnectButtonClickCommand { get; }
         public ICommand HolePunchClickCommand { get; }
         public ICommand HTTPProxtIpCommand { get; }
         public ICommand ClearChatHistoryCommand { get; }
+        public ICommand ApplyCameraSettingsCmd { get; }
 
 
         private ComboBoxItem transportLayer =  new ComboBoxItem();
+        private ComboBoxItem fTTransportLayer =  new ComboBoxItem();
         private ComboBoxItem compressionFormat = new ComboBoxItem();
         
         private string logText;
@@ -28,22 +33,24 @@ namespace Videocall.Settings
         private string tcpLatency;
         private string udpLatency;
         private string totalNumLostPackages;
-        private string packageLossRate;
         private string imageTransferRate;
         private double fpsSliderValue = 30;
         private double imageQualitySliderValue = 83.3d;
         private double actualImageQuality;
         private double volumeValue = 3;
         private double bufferDurationValue = 200;
-        private bool enableCongestionControl = true;
+        private bool enableCongestionControl = false;
 
 
         private int bufferedDurationPercentage;
 
         private bool listenYourselfCheck = false;
         private bool sendDoubleAudiocheck=true;
+        private int camFrameWidth = 640;
+        private int camFrameHeight = 480;
 
         #region Properties
+
         public string LogText
         {
             get => logText; set { logText = value; OnPropertyChanged(); }
@@ -57,6 +64,17 @@ namespace Videocall.Settings
                 transportLayer = value;
 
                 HandleTransportLayerChanged(transportLayer.Content.ToString());
+                OnPropertyChanged();
+            }
+        }
+        public ComboBoxItem FTTransportLayer
+        {
+            get => fTTransportLayer; set
+            {
+                if (value.Content == null) return;
+                fTTransportLayer = value;
+
+                HandleFTTransportLayerChanged(fTTransportLayer.Content.ToString());
                 OnPropertyChanged();
             }
         }
@@ -131,8 +149,16 @@ namespace Videocall.Settings
                 OnPropertyChanged();
             }
         }
-
-
+        // Debug Only
+        public bool SendReliable
+        {
+            get => sendReliable; set
+            {
+                sendReliable = value;
+                HandleSendReliableToggle(value);
+                OnPropertyChanged();
+            }
+        }
 
         public bool SendDoubleAudiocheck
         {
@@ -150,13 +176,13 @@ namespace Videocall.Settings
         private ServiceHub services;
         private bool holePunchRequestActive;
         private string averageLatency;
+        private bool sendReliable = false;
 
         public PersistentSettingConfig Config { get; set; } = PersistentSettingConfig.Instance;
         public string TcpLatency { get => tcpLatency; set { tcpLatency = value; OnPropertyChanged(); } }
         public string UdpLatency { get => udpLatency; set { udpLatency = value; OnPropertyChanged(); } }
 
         public string TotalNumLostPackages { get => totalNumLostPackages; set { totalNumLostPackages = value; OnPropertyChanged(); } }
-        public string PackageLossRate { get => packageLossRate; set { packageLossRate = value; OnPropertyChanged(); } }
 
         public int BufferedDurationPercentage { get => bufferedDurationPercentage; set { bufferedDurationPercentage = value; OnPropertyChanged(); } }
 
@@ -172,31 +198,43 @@ namespace Videocall.Settings
             set { enableCongestionControl = value; OnPropertyChanged(); services.VideoHandler.EnableCongestionControl = value; }
         }
 
+        public int CamFrameWidth { get => camFrameWidth; set { camFrameWidth = value; OnPropertyChanged(); } }
+        public int CamFrameHeight { get => camFrameHeight; set { camFrameHeight = value; OnPropertyChanged(); } }
+
+
         //public bool AutoReconnect { get; set; } = true;
         //public bool AutoHolepunch { get; set; } = true;
 
-        internal SettingsViewModel(ServiceHub services)
+        internal SettingsViewModel(ServiceHub services, float camFrameWidth = 0, float camFrameHeight = 0)
         {
+            instance = this;
             this.services = services;
             ConnectButtonClickCommand = new RelayCommand(HandleConnectRequest);
             DisconnectButtonClickCommand = new RelayCommand(OnDisconnectClicked);
             HolePunchClickCommand = new RelayCommand(OnHolePunchClicked);
             HTTPProxtIpCommand = new RelayCommand(HandleProxyIpRequested);
             ClearChatHistoryCommand = new RelayCommand(HandleClearChatHistory);
+            ApplyCameraSettingsCmd = new RelayCommand(ApplyCamSettings);
 
 
-            services.MessageHandler.client.OnDisconnected += OnDisconnected;
+            services.MessageHandler.OnDisconnected += OnDisconnected;
             //services.MessageHandler.client.OnPeerRegistered += OnPeerRegistered;
             services.LatencyPublisher.Latency += OnLatencyAvailable;
 
             services.AudioHandler.OnStatisticsAvailable += HandleAudioStatistics;
             services.VideoHandler.QualityAutoAdjusted += (value) => ActualImageQuality = value;
             services.VideoHandler.SendRatePublished += (value) => ImageTransferRate = "Transfer Rate: " + value.ToString("N2") + " Kb/s";
-            services.VideoHandler.AverageLatencyPublished += (value) => AverageLatency ="Average Latency: " +value.ToString("N1") +" ms";
+            services.VideoHandler.AverageLatencyPublished += (value) => AverageLatency = "Average Latency: " + value.ToString("N1") + " ms";
             services.VideoHandler.EnableCongestionControl = enableCongestionControl;
 
             HandleConnectRequest(null);
-            MainWindowEventAggregator.Instance.PeerRegistered+= OnPeerRegistered;
+            MainWindowEventAggregator.Instance.PeerRegistered += OnPeerRegistered;
+           
+        }
+
+        private void ApplyCamSettings(object obj)
+        {
+            services.VideoHandler.ApplySettings(camFrameWidth, camFrameHeight);
         }
 
         private void OnPeerRegistered(PeerInfo info)
@@ -212,9 +250,7 @@ namespace Videocall.Settings
 
         private void HandleAudioStatistics(AudioStatistics stats)
         {
-            TotalNumLostPackages = "Total Lost Packages : " + stats.TotalNumDroppedPAckages.ToString();
-            PackageLossRate = "Lost Package Rate/s : " + stats.NumLostPackages;
-
+            TotalNumLostPackages = "Total Lost Packages : " + stats.TotalNumDroppedPackages.ToString();
             BufferedDurationPercentage = (int)(((float)stats.BufferedDuration / (float)stats.BufferSize) * 100);
         }
 
@@ -238,7 +274,7 @@ namespace Videocall.Settings
 
         private void OnLatencyAvailable(object sender, Services.Latency.LatencyEventArgs e)
         {
-            var sesId = services.MessageHandler.client.sessionId;
+            var sesId = services.MessageHandler.SessionId;
             if (e.UdpLatency != null && e.UdpLatency.ContainsKey(sesId))
                 DispatcherRun(() => UdpLatency = "Server Udp Latency: " + e.UdpLatency[sesId].ToString("N1") + " ms");
 
@@ -252,7 +288,7 @@ namespace Videocall.Settings
             try
             {
                 AddLog("\nConnecting..");
-                await services.MessageHandler.client.ConnectAsync(Dns.GetHostAddresses(Config.Ip)[0].ToString(), int.Parse(Config.Port));
+                await services.MessageHandler.ConnectAsync(Dns.GetHostAddresses(Config.Ip)[0].ToString(), int.Parse(Config.Port));
                 AddLog("\nConnected");
             }
             catch
@@ -267,7 +303,7 @@ namespace Videocall.Settings
         private void OnDisconnectClicked(object obj)
         {
             CallStateManager.EndCall();
-            services.MessageHandler.client.Disconnect();
+            services.MessageHandler.Disconnect();
         }
         private void OnDisconnected()
         {
@@ -282,9 +318,9 @@ namespace Videocall.Settings
         {
             try
             {
-                if (peerId.CompareTo(services.MessageHandler.client.sessionId) > 0)
+                if (peerId.CompareTo(services.MessageHandler.SessionId) > 0)
                 {
-                    var res = await services.MessageHandler.client.RequestHolePunchAsync(peerId, 5000);
+                    var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
                     if (!res)
                         AddLog("\nHolePunch Failed on :" + peerId.ToString());
 
@@ -312,7 +348,7 @@ namespace Videocall.Settings
                 {
                     try
                     {
-                        var res = await services.MessageHandler.client.RequestHolePunchAsync(peerId, 5000);
+                        var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
                         if (!res)
                             AddLog("\nHolePunch Failed on :" + peerId.ToString());
 
@@ -333,10 +369,17 @@ namespace Videocall.Settings
         {
             services.AudioHandler.LoopbackAudio = value;
         }
-
+        private void HandleSendReliableToggle(bool value)
+        {
+           // services.AudioHandler.LoopbackAudio = value;
+        }
         private void HandleTransportLayerChanged(string value)
         {
             services.MessageHandler.TransportLayer = value;
+        }
+        private void HandleFTTransportLayerChanged(string value)
+        {
+            services.MessageHandler.FTTransportLayer = value;
         }
         private void HandleCompressionFormatChanged(string v)
         {

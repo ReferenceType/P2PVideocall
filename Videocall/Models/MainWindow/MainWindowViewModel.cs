@@ -241,7 +241,7 @@ public class MainWindowViewModel : PropertyNotifyBase
     private void HandleCallSelected(object obj)
     {
         if(selectedPeer != null)
-        model.HandleCallUserRequest(selectedPeer);
+            model.HandleCallUserRequest(selectedPeer);
 
         
     }
