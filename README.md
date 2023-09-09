@@ -2,7 +2,7 @@
 Voice-Video Call Wpf Application based on P2PNetwork with protobuf messages.
 <br/>Tested and achieved stable calls between 1.204,5 km distance clients
 <br/>
-<br/>Pre-Release available https://github.com/ReferenceType/P2PVideocall/releases/tag/v0.1.0-alpha
+<br/>Release available https://github.com/ReferenceType/P2PVideocall/releases/tag/v0.2.0-alpha
 ## Features
 - Videocall among connected peers 
 - Persisitent Chat, where chat history loaded on demand as you scroll up
