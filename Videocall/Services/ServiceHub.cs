@@ -4,43 +4,81 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Videocall.Services.Latency;
 using Videocall.Services.ScreenShare;
+using Videocall.Services.Video.H264;
 
 namespace Videocall
 {
     internal class ServiceHub
     {
+
+        private static ServiceHub instance;
+        public static ServiceHub Instance
+        {
+            get
+            {
+                if(instance == null)
+                    instance = new ServiceHub();
+                return instance;
+            }
+        }
         public AudioHandler AudioHandler { get;}
-        public VideoHandler VideoHandler { get;}
+        public VideoHandler2 VideoHandler { get;}
 
         public MessageHandler MessageHandler { get;}
 
         public FileShare FileShare { get;}
 
         public LatencyPublisher LatencyPublisher { get; }
-        public SimpleScreenShareHandler ScreenShareHandler { get; }
+        public ScreenShareHandlerH264 ScreenShareHandler { get; }
 
-
-        public ServiceHub(AudioHandler audioHandlerAudioHandler,
-                          VideoHandler videoHandler,
-                          MessageHandler messageHandler,
-                          FileShare fileSHare,
-                          LatencyPublisher latencyPublisher,
-                          SimpleScreenShareHandler screenShareHandler)
+        public Action<VCStatistics> VideoStatisticsAvailable;
+        private VCStatistics stats;
+        private VCStatistics statsPrev;
+      
+        private ServiceHub()
         {
-            AudioHandler = audioHandlerAudioHandler;
-            VideoHandler = videoHandler;
-            MessageHandler = messageHandler;
-            FileShare = fileSHare;
-            LatencyPublisher = latencyPublisher;
-            ScreenShareHandler = screenShareHandler;
+            AudioHandler = new AudioHandler();
+            VideoHandler = new VideoHandler2();
+            FileShare = new FileShare();
+            MessageHandler = new MessageHandler();
+            LatencyPublisher = new LatencyPublisher(MessageHandler);
+            ScreenShareHandler = new ScreenShareHandlerH264();
 
-            messageHandler.OnMessageAvailable += HandleMessage;
-
+            AudioHandler.StartSpeakers();
+            MessageHandler.OnMessageAvailable += HandleMessage;
             CallStateManager.StaticPropertyChanged += CallStateChanged;
             AudioHandler.OnStatisticsAvailable += OnAudioStatsAvailable;
+            PublishStatistics();
+        }
+
+        private void PublishStatistics()
+        {
+            Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(1000);// dont change time
+                    var vs = VideoHandler.GetStatistics();
+                    var scs = ScreenShareHandler.GetStatistics();
+
+                    stats.OutgoingFrameRate = vs.OutgoingFrameRate + scs.OutgoingFrameRate;
+                    stats.IncomingFrameRate = vs.IncomingFrameRate + scs.IncomingFrameRate;
+                    stats.TransferRate = scs.TransferRate + vs.TransferRate;
+                    stats.AverageLatency = vs.AverageLatency;
+                    stats.ReceiveRate = vs.ReceiveRate + scs.ReceiveRate;
+                    stats.CurrentMaxBitRate = vs.CurrentMaxBitRate;
+                    if(statsPrev != stats)
+                    {
+                        statsPrev = stats;
+                        VideoStatisticsAvailable?.Invoke(stats);
+                    }
+                }
+
+            });
         }
 
         private void HandleMessage(MessageEnvelope message)
@@ -57,12 +95,15 @@ namespace Videocall
 
         private void OnAudioStatsAvailable(AudioStatistics stats)
         {
-            VideoHandler.AudioBufferLatency = stats.BufferedDuration;
+            // you can mode it as prop
+            VideoHandler.AudioBufferLatency = AudioHandler.BufferedDurationAvg;
         }
 
         private void CallStateChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-           if(CallStateManager.GetState() == CallStateManager.CallState.OnCall)
+            var currState = CallStateManager.GetState();
+            if (currState == CallStateManager.CallState.OnCall ||
+                currState == CallStateManager.CallState.Available)
             {
                 AudioHandler.ResetStatistics();
                 AudioHandler.FlushBuffers();

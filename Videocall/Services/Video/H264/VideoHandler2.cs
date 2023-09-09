@@ -1,118 +1,87 @@
 ﻿using NetworkLibrary;
+using NetworkLibrary.Components;
 using OpenCvSharp;
-using OpenH264Lib;
-using ProtoBuf;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Drawing;
+using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using Videocall.Settings;
+using static H264Sharp.Encoder;
 
 namespace Videocall.Services.Video.H264
 {
-
-    [ProtoContract]
-    class ImageMessage : IProtoMessage
-    {
-        [ProtoMember(1)]
-        public DateTime TimeStamp;
-
-        [ProtoMember(2)]
-        public byte[] Frame;
-    }
-    enum CompressionType
-    {
-        Jpg = 0,
-        Webp,
-        Png
-    }
+    
     internal class VideoHandler2
     {
-        public Action<byte[], int> OnCameraImageAvailable;
-        public Action<Bitmap> OnNetworkFrameAvailable;
-        public Action<int> QualityAutoAdjusted;
-        public Action<float> SendRatePublished;
-        public Action<double> AverageLatencyPublished;
+        public Action<byte[], int> OnBytesAvailable;
+        public Action<Mat> OnLocalImageAvailable;
+        public Action<Mat> OnRemoteImageAvailable;
+        public Action<Action<PooledMemoryStream>, int, bool> OnBytesAvailableAction;
+        public Action KeyFrameRequested;
 
-        public int captureRateMs = 50;
-        private int compressionLevel = 83;
-        private int compressionLevel_ = 83;
-        public bool EnableCongestionControl { get; set; } = false;
+        public int CaptureIntervalMs = 43;
+        public int TargetBitrate = 1_500_000;
+
         public int VideoLatency { get; internal set; } = 200;
         public int AudioBufferLatency { get; internal set; } = 0;
         public double AverageLatency { get; private set; } = -1;
-        internal CompressionType CompressionType
-        {
-            get => compressionType; set
-            {
-                compressionType = value;
-                AverageLatency = 0;
-                DeviationRtt = 0;
-                avgDivider = 2;
-            }
-        }
 
-        public int CompressionLevel
-        {
-            get => compressionLevel;
-            set { compressionLevel = value; compressionLevel_ = value; QualityAutoAdjusted?.Invoke(value); }
-        }
+        public ConcurrentBag<Mat> MatPool = new ConcurrentBag<Mat>();
 
-        public bool LimitPackageSize { get; set; } = false;
-
-        private double DeviationRtt = 0;
-
+        private object frameQLocker = new object();
         private VideoCapture capture;
-
-        private readonly ConcurrentDictionary<DateTime, Bitmap> frameQueue = new ConcurrentDictionary<DateTime, Bitmap>();
-        private readonly AutoResetEvent imgReady = new AutoResetEvent(false);
-        private DateTime lastProcessedTimestamp = DateTime.Now;
-        private CompressionType compressionType = CompressionType.Webp;
-        private int frameCount;
-        private int frameRate = 0;
-        private int bytesSent = 0;
-        private long avgDivider = 2;
+        private H264Transcoder transcoder;
+        private readonly ConcurrentDictionary<DateTime, Mat> frameQueue = new ConcurrentDictionary<DateTime, Mat>();
         private readonly ConcurrentDictionary<Guid, DateTime> timeDict = new ConcurrentDictionary<Guid, DateTime>();
-        private bool paused = false;
-        private bool captureRunning = false;
-        private object frameQlocker = new object();
+        private readonly ManualResetEvent consumerSignal = new ManualResetEvent(false);
+        private readonly ManualResetEvent obtainingCamera = new ManualResetEvent(false);
+        private Thread captureThread = null;
+        private DateTime lastProcessedTimestamp = DateTime.Now;
+        private DateTime latestAck;
+        private ConfigType configType = ConfigType.CameraBasic;
+        private int incomingFrameCount;
+        private int capturedFrameCnt = 0;
+        private int incomingFrameRate = 0;
+        private int outgoingFrameRate = 0;
+        private int bytesSent = 0;
+        private int bytesReceived = 0;
+        private int camIdx;
+        private int fps = 30;
+        private int unAcked = 0;
+        private int actualFps = 0;
+        private int currentBps = 0;
+        private int frameQueueCount = 0;
         private int frameWidth = 640;
         private int frameHeight = 480;
-        private bool adjustCamsize = false;
-        private OpenH264Lib.Encoder encoder;
-        private OpenH264Lib.Decoder decoder;
-
+        private int minBps => (TargetBitrate * 10) / 100;
+        private int periodicKeyFrameInterval = -1;
+        private long avgDivider = 2;
+        private bool paused = false;
+        private bool captureRunning = false;
+        private bool keyFrameRequested;
+        private bool adjustCamSize = false;
+        private bool enableCongestionAvoidance => SettingsViewModel.Instance.Config.EnableCongestionAvoidance;
         public VideoHandler2()
         {
-            QualityAutoAdjusted?.Invoke(compressionLevel_);
-            encoder = H264Transcoder.SetupEncoder(frameWidth, frameHeight, OnEncoded);
-            decoder = H264Transcoder.SetupDecoder();
-            // statistics
-            Task.Run(async () =>
-            {
-                while (true)
-                {
-                    await Task.Delay(1000);
-                    int count = Interlocked.Exchange(ref frameCount, 0);
-                    frameRate = Math.Max(count, 1);
-                    SendRatePublished?.Invoke((float)bytesSent / 1000);
-                    bytesSent = 0;
-                }
-
-            });
-            // audio jitter syncronization
+            SetupTranscoder(fps, TargetBitrate);
+           
+            // audio jitter synchronization
             Thread t = new Thread(() =>
             {
                 while (true)
                 {
-                    imgReady.WaitOne();
-                    while (frameQueue.Count > (VideoLatency + AudioBufferLatency) / (1000 / frameRate))
+                    if(Interlocked.CompareExchange(ref frameQueueCount,0,0) == 0)
+                        consumerSignal.WaitOne();
+
+                    Thread.Sleep(1);//slow dispatch
+                    var videoJitterLatency = transcoder.Duration;
+
+                    if (frameQueue.Count > (AudioBufferLatency-Math.Min(AudioBufferLatency, videoJitterLatency)) / (1000 / Math.Max(1,incomingFrameRate)))
                     {
-                        KeyValuePair<DateTime, Bitmap> lastFrame;// oldest
-                        lock (frameQlocker)
+                        KeyValuePair<DateTime, Mat> lastFrame;// oldest
+                        lock (frameQLocker)
                         {
                             var samplesOrdered = frameQueue.OrderByDescending(x => x.Key);
                             lastFrame = samplesOrdered.Last();
@@ -120,96 +89,154 @@ namespace Videocall.Services.Video.H264
 
                         if (lastProcessedTimestamp < lastFrame.Key)
                         {
-                            OnNetworkFrameAvailable?.Invoke(lastFrame.Value);
+                            OnRemoteImageAvailable?.Invoke(lastFrame.Value);
                             lastProcessedTimestamp = lastFrame.Key;
                         }
 
-                        frameQueue.TryRemove(lastFrame.Key, out _);
-
+                        if(frameQueue.TryRemove(lastFrame.Key, out _))
+                            Interlocked.Decrement(ref frameQueueCount);
+                      
                     }
                 }
 
             });
-            t.Priority = ThreadPriority.AboveNormal;
             t.Start();
         }
-
-        private void OnEncoded(byte[] data, int length, OpenH264Lib.Encoder.FrameType keyFrame)
+       
+        private void SetupTranscoder(int fps, int bps)
         {
-            bytesSent += length;
-            OnCameraImageAvailable?.Invoke(data, length);
+            transcoder = new H264Transcoder(MatPool, fps, bps);
+            //transcoder.EncodedFrameAvailable = HandleEncodedFrame;
+            transcoder.EncodedFrameAvailable2 = HandleEncodedFrame2;
+            transcoder.DecodedFrameAvailable = HandleDecodedFrame;
+            transcoder.KeyFrameRequested = () => KeyFrameRequested?.Invoke() ;
+            transcoder.SetKeyFrameInterval(periodicKeyFrameInterval);
         }
 
+       
         public bool ObtainCamera()
         {
             if (capture != null && capture.IsOpened()) return true;
+            obtainingCamera.Reset();
 
-            capture = new VideoCapture(CaptureDevice.VFW, 0);
-            capture.Open(0);
-
+            if(captureThread!=null && captureThread.IsAlive)
+            {
+                captureThread.Join();
+            }
+            capture = new VideoCapture(camIdx, VideoCaptureAPIs.WINRT);
+           
+            capture.Open(camIdx);
             capture.FrameWidth = frameWidth;
             capture.FrameHeight = frameHeight;
+            obtainingCamera.Set();
+            DebugLogWindow.AppendLog("[Info] Camera Backend: ", capture.GetBackendName());
+
+            transcoder.SetupTranscoder(capture.FrameWidth,capture.FrameHeight,configType);
+
             return capture.IsOpened();
         }
 
         public void CloseCamera()
         {
-            if (capture != null && capture.IsOpened())
-            {
-
-                capture.Release();
-                capture = null;
-            }
-        }
-        ConcurrentBag<Mat> framePool = new ConcurrentBag<Mat>();
-        public void StartCapturing()
-        {
-            if (captureRunning)
-                return;
-            captureRunning = true;
-            var frame = new Mat();
-            if (!capture.IsOpened())
-            {
-                if (!ObtainCamera())
-                    return;
-
-            }
-            int i = 0;
-            QualityAutoAdjusted?.Invoke(compressionLevel_);
-            Thread t = new Thread(() =>
+            if (capture != null)
             {
                 try
                 {
+                    capture.Release();
+                } 
+                catch { DebugLogWindow.AppendLog("Error", "Capture Release Failed"); }
+
+                capture = null;
+                Interlocked.Exchange(ref frameQueueCount,0);
+
+                while (MatPool.TryTake(out var mat))
+                    mat.Dispose();
+
+                OnLocalImageAvailable?.Invoke(null);
+            }
+        }
+       
+        public void StartCapturing()
+        {
+            adjustCamSize = false;
+            obtainingCamera.WaitOne();
+            if (captureRunning)
+                return;
+
+            captureRunning = true;
+            var frame = new Mat();
+            var f = new Mat();
+            if (!capture.IsOpened())
+            {
+                if (!ObtainCamera())
+                {
+                    captureRunning = false;
+                    return;
+                }
+            }
+
+           Stopwatch sw = new Stopwatch();
+            captureThread = new Thread(() =>
+            {
+                try
+                {
+                    sw.Start();
+                    int remainderTime = 0;
                     while (capture != null && capture.IsOpened())
                     {
-                        Thread.Sleep(Math.Max(0, captureRateMs - 16));
+                        if (capture == null || !capture.IsOpened())
+                            return;
                         if (paused)
-                            continue;
-
-                        capture.Read(frame);
-
-                        ImageEncodingParam[] param;
-                        string extention = "";
-                        //if (CompressionType == CompressionType.Webp)
-                        //{
-                        //    extention = ".webp";
-                        //    param = new ImageEncodingParam[1];
-                        //    param[0] = new ImageEncodingParam(ImwriteFlags.WebPQuality, Clamp(40, 95, compressionLevel_));
-                        //}
-                        //else
                         {
-                            extention = ".jpg";
-                            param = new ImageEncodingParam[2];
-                            param[0] = new ImageEncodingParam(ImwriteFlags.JpegQuality, Clamp(40, 95, compressionLevel_));
-                            param[1] = new ImageEncodingParam(ImwriteFlags.JpegOptimize, 1);
+                            Thread.Sleep(100);
+                            continue;
                         }
+
+                        if (adjustCamSize)
+                        {
+                            adjustCamSize = false;
+                            if(capture.FrameWidth != frameWidth || capture.FrameHeight != frameHeight)
+                            {
+                                capture.Release();
+                                capture.Dispose();
+                                capture = new VideoCapture(camIdx,VideoCaptureAPIs.MSMF);
+                                capture.Open(camIdx);
+                                capture.FrameWidth = frameWidth;
+                                capture.FrameHeight = frameHeight;
+                                frameWidth = capture.FrameWidth;
+                                frameHeight = capture.FrameHeight;
+                            }
+                           
+                            transcoder.ApplyChanges(fps,TargetBitrate,frameWidth,frameHeight,configType);
+                            frame =  new Mat();
+                            keyFrameRequested = true;
+                        }
+                        Thread.Sleep(1);
+                        if (!capture.Grab())
+                        {
+                            return;
+                        }
+                      
+
+                        int sleepTime = CaptureIntervalMs - ((int)sw.ElapsedMilliseconds + remainderTime) ;
+                        if (sleepTime > 0)
+                        {
+                            continue;
+                        }
+                       
+                        capture.Retrieve(frame);
+                         if (frame.Width == 0 || frame.Height == 0)
+                            return;
+
+                        remainderTime = -sleepTime;// to positive
+                        sw.Restart();
 
                         try
                         {
-                            var frameL = frame;
-                            byte[] imageBytes;
-                            imageBytes = frameL.ImEncode(ext: extention, param);
-                            encoder.Encode(imageBytes);
+                            EncodeFrame(frame);
+                            OnLocalImageAvailable?.Invoke(frame);
+                            capturedFrameCnt++;
+                         
                         }
                         catch (Exception ex) { DebugLogWindow.AppendLog(" Capture encoding failed: ", ex.Message); };
                     }
@@ -218,72 +245,131 @@ namespace Videocall.Services.Video.H264
                 {
                     captureRunning = false;
                     CloseCamera();
+                    OnLocalImageAvailable?.Invoke(null);
                 }
 
             });
-            t.Start();
-
+            captureThread.Start();
+            GC.KeepAlive(frame);
 
         }
-        private int Clamp(int low, int high, int val)
+        Mat m = null;
+        private void EncodeFrame(Mat frame)
         {
-            if (val > high) return high;
-            else if (val < low) return low;
-            return val;
+            try
+            {
+                if (m == null)
+                    m = new Mat();
+
+                var src = InputArray.Create(frame);
+                var @out = OutputArray.Create(m);
+                Cv2.CvtColor(src, @out, ColorConversionCodes.BGR2YUV_I420);
+
+                if (keyFrameRequested)
+                {
+                    keyFrameRequested = false;
+                    transcoder.ForceIntraFrame();
+                    Console.WriteLine("Forcing Key Frame");                    
+                }
+                else
+                {
+                    unsafe
+                    {
+                        transcoder.Encode(m.DataPointer);
+                    }
+
+                }
+
+            }
+            catch (Exception ex) { DebugLogWindow.AppendLog(" Capture encoding failed: ", ex.Message); };
+        }
+
+        private void HandleDecodedFrame(Mat mat)
+        {
+            lock (frameQLocker)
+            {
+                if (frameQueue.TryAdd(DateTime.Now, mat))
+                    Interlocked.Increment(ref frameQueueCount);
+            }
+            consumerSignal.Set();
+        }
+
+        private void HandleEncodedFrame(byte[] arg1, int arg2)
+        {
+            SendImageData(arg1, arg2);
+        }
+        
+        private void HandleEncodedFrame2(Action<PooledMemoryStream> action, int byteLenght, bool isKeyFrame)
+        {
+            int howManyUnackedAllowed = (int)(AverageLatency / (1000 / Math.Max(1,actualFps))) + 2;
+            int pending = Interlocked.CompareExchange(ref unAcked,0,0);
+            if (pending > howManyUnackedAllowed)
+            {
+                RedcuceQuality(20 * (howManyUnackedAllowed - pending));
+            }
+            bytesSent += byteLenght;
+            OnBytesAvailableAction?.Invoke(action,byteLenght,isKeyFrame);
+
+        }
+
+        Random rng = new Random();
+        private void SendImageData(byte[] data, int length)
+        {
+            int howManyUnackedAllowed = (int)(AverageLatency / (1000/ Math.Max(1, actualFps))) + 2;
+            int pending = Interlocked.CompareExchange(ref unAcked, 0, 0); ;
+            if (timeDict.Count > howManyUnackedAllowed)
+            {
+                RedcuceQuality(5 * (howManyUnackedAllowed - pending));
+            }
+            //if (rng.Next(0, 100) % 15 == 0)
+            //    return;
+
+            //var dat = ByteCopy.ToArray(data, 0, length);
+            //Task.Delay(rng.Next(0, 500)).ContinueWith((x) =>
+            //{
+            //    OnBytesAvailable?.Invoke(dat, length);
+            //    bytesSent += length;
+
+            //});
+
+            bytesSent += length;
+            OnBytesAvailable?.Invoke(data, length);
         }
 
         internal unsafe void HandleIncomingImage(DateTime timeStamp, byte[] payload, int payloadOffset, int payloadCount)
         {
-            fixed (byte* b = &payload[payloadOffset])
-            {
-                var bmp = decoder.Decode(b, payloadCount);
-                if (bmp != null)
-                {
-                    lock (frameQlocker)
-                        frameQueue[timeStamp] = bmp;
-                    imgReady.Set();
-                }
-            }
-
-
-            //var buffa = BufferPool.RentBuffer(payloadCount);
-            //Buffer.BlockCopy(payload, payloadOffset, buffa, 0, payloadCount);
-
-            ////ThreadPool.UnsafeQueueUserWorkItem((x) =>
-            ////{
-            //// var buff = (byte[])x;
-            //var buff = buffa;
-            //Mat img = new Mat(NativeMethods.imgcodecs_imdecode_vector(buff, new IntPtr(payloadCount), (int)ImreadModes.Color));
-            //BufferPool.ReturnBuffer(buff);
-
-            //lock (frameQlocker)
-            //    frameQueue[timeStamp] = img;
-
-            //imgReady.Set();
-            //Interlocked.Increment(ref frameCount);
-            //// }, buffa);
-
-
+            bytesReceived += payloadCount;
+            consumerSignal.Set();
+            transcoder.HandleIncomingFrame(timeStamp ,payload, payloadOffset, payloadCount);
         }
+      
 
         internal void FlushBuffers()
         {
             frameQueue.Clear();
+
+            while(MatPool.TryTake(out var mat))
+                mat.Dispose();
+
             AverageLatency = 0;
-            DeviationRtt = 0;
             avgDivider = 2;
             timeDict.Clear();
+            OnRemoteImageAvailable?.Invoke(null);
         }
 
         internal void Pause() => paused = true;
         internal void Resume() => paused = false;
-
+       
         internal void HandleAck(MessageEnvelope message)
         {
             double currentLatency = 0;
             if (timeDict.TryRemove(message.MessageId, out var timeStamp))
             {
                 currentLatency = (DateTime.Now - timeStamp).TotalMilliseconds;
+                if(timeStamp>latestAck)
+                    latestAck = timeStamp;
+                Interlocked.Decrement(ref unAcked);
+
             }
             else
                 return;
@@ -294,74 +380,145 @@ namespace Videocall.Services.Video.H264
             }
 
             if (currentLatency <= AverageLatency)
-                BumpQuality();
+                BumpQuality(2);
             else
-                RecuceQuality();
+            {
+               // RedcuceQuality((int)Math.Abs(currentLatency - AverageLatency));
+                //Console.WriteLine("recuced by latency");
+            }
             AverageLatency = (avgDivider * AverageLatency + currentLatency) / (avgDivider + 1);
-            avgDivider++;
+            avgDivider = Math.Min(600,avgDivider+1);
 
-            AverageLatencyPublished?.Invoke(AverageLatency);
-            // check for lost packets
+            // check for lost packets/jitter
             if (timeDict.Count > 0)
             {
                 foreach (var item in timeDict)
                 {
                     List<Guid> toRemove = new List<Guid>();
-                    if ((DateTime.Now - item.Value).TotalMilliseconds > AverageLatency * 2)
+                    if ((DateTime.Now - item.Value).TotalMilliseconds > AverageLatency*1.3)
                     {
                         // lost package , we need to remove it and reduce quality after
                         toRemove.Add(item.Key);
                     }
                     foreach (var key in toRemove)
                     {
-                        timeDict.TryRemove(key, out _);
-                        RecuceQuality(10);
+                        if(timeDict.TryRemove(key, out _))
+                            Interlocked.Decrement(ref unAcked);
+                      
+                        RedcuceQuality(5);
                     }
                 }
 
             }
 
         }
-
-        private void RecuceQuality(int reduction = 1)
-        {
-            if (!EnableCongestionControl) return;
-
-            int old = compressionLevel_;
-            int compressionTarget = compressionLevel_ - reduction;
-            compressionLevel_ = Math.Max(40, compressionTarget);
-
-            if (old != compressionLevel_)
-                QualityAutoAdjusted?.Invoke(compressionLevel_);
-        }
-
-        private void BumpQuality(int bump = 5)
-        {
-            if (!EnableCongestionControl) return;
-
-            int old = compressionLevel_;
-            var compressionTarget = compressionLevel_ + bump;
-            compressionLevel_ = Math.Min(CompressionLevel, compressionTarget);
-
-            if (old != compressionLevel_)
-                QualityAutoAdjusted?.Invoke(compressionLevel_);
-
-        }
-
-        // when we dispatrch image to remote, we need to timestamp it and compare on acks arrival
         internal void ImageDispatched(Guid messageId, DateTime timeStamp)
         {
-            timeDict.TryAdd(messageId, timeStamp);
+            if(timeDict.TryAdd(messageId, timeStamp))
+                Interlocked.Increment(ref unAcked);
+        }
+       
+        private void RedcuceQuality(int factor=1)
+        {
+            if (factor < 0) return;
+            if (!enableCongestionAvoidance) return;
+            if(currentBps == 0)
+            {
+                currentBps = TargetBitrate;
+            }
+            var currentBps_ =currentBps - ( currentBps * factor / 100);
+            currentBps = Math.Max(currentBps_, minBps);
+            transcoder?.SetTargetBps(currentBps);
+           
         }
 
-        internal void ApplySettings(int camFrameWidth, int camFrameHeight)
+        private void BumpQuality(int factor=1)
+        {
+            if (currentBps == 0)
+            {
+                currentBps = TargetBitrate;
+            }
+            var currentBps_ = currentBps+ ((currentBps * factor) / 100);
+            currentBps = Math.Min(TargetBitrate, currentBps_);
+            transcoder?.SetTargetBps(currentBps);
+        }
+
+        internal void ApplySettings(int camFrameWidth, int camFrameHeight,int targetBps, int idrInterval, int camIndex, string config)
         {
             if (camFrameHeight == 0 || camFrameWidth == 0)
                 return;
+
             frameHeight = camFrameHeight;
             frameWidth = camFrameWidth;
-            adjustCamsize = true;
+            TargetBitrate = targetBps*1000;
+            camIdx = camIndex;
+            adjustCamSize = true;
+            periodicKeyFrameInterval = idrInterval;
+            transcoder?.SetKeyFrameInterval(periodicKeyFrameInterval);
+            transcoder?.SetTargetBps((int)targetBps);
+
+            if (config == "Default")
+                configType = ConfigType.CameraBasic;
+            else
+                configType = ConfigType.CameraCaptureAdvanced;
+
+            AverageLatency = 0; avgDivider = 0;
         }
 
+        internal void ForceKeyFrame()
+        {
+            keyFrameRequested = true;
+            RedcuceQuality(20);
+        }
+      
+        public VCStatistics GetStatistics()
+        {
+            incomingFrameRate = Interlocked.Exchange(ref incomingFrameCount, 0);
+            transcoder?.SetTargetFps(actualFps);
+
+            var sendRate = (float)bytesSent / 1000;
+            bytesSent = 0;
+            var receiveRate = (float)bytesReceived / 1000;
+            bytesReceived = 0;
+
+            outgoingFrameRate = capturedFrameCnt;
+            actualFps = outgoingFrameRate;
+            capturedFrameCnt = 0;
+
+            var st = new VCStatistics
+            {
+                OutgoingFrameRate = outgoingFrameRate,
+                IncomingFrameRate = incomingFrameRate,
+                TransferRate = sendRate,
+                AverageLatency = AverageLatency,
+                ReceiveRate = receiveRate,
+                CurrentMaxBitRate = currentBps == 0 ? TargetBitrate : currentBps,
+            };
+
+            return st;
+        }
     }
+    struct VCStatistics
+    {
+        public float IncomingFrameRate;
+        public float OutgoingFrameRate;
+        public float TransferRate;
+        public float ReceiveRate;
+        public double AverageLatency;
+        public int CurrentMaxBitRate;
+        public override bool Equals(object obj) => obj is VCStatistics other && this.Equals(other);
+
+        public bool Equals(VCStatistics p) => IncomingFrameRate == p.IncomingFrameRate
+            && OutgoingFrameRate == p.OutgoingFrameRate
+            && TransferRate == p.TransferRate
+            && ReceiveRate == p.ReceiveRate
+            && AverageLatency == p.AverageLatency;
+
+        public override int GetHashCode() => (IncomingFrameRate, OutgoingFrameRate, TransferRate, AverageLatency).GetHashCode();
+
+        public static bool operator ==(VCStatistics lhs, VCStatistics rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(VCStatistics lhs, VCStatistics rhs) => !(lhs == rhs);
+    }
+
 }

@@ -15,7 +15,7 @@
         Activated="Window_Activated"
         Title="VideoCall" 
         Icon="Resources/favicon2.ico"
-        Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="550" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}"
+        Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="800" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}" MinWidth="1200"
         BorderThickness="1,1,1,1" BorderBrush="#505050">
 
     <Window.Resources>
@@ -107,7 +107,7 @@
                         <Grid >
                             <Image x:Name="MainVideoCanvas" HorizontalAlignment="Left" Height="auto" Margin="10,10,0,75" VerticalAlignment="Top" Width="auto" Source="{Binding MainWindowViewModel.PrimaryCanvasSource }" />
                             <Grid>
-                                <Image x:Name="SecondaryVideoCanvas" HorizontalAlignment="Right" Height="122" Margin="10,10,0,0" VerticalAlignment="Top" Width="167" Source="{Binding MainWindowViewModel.SecondaryCanvasSource }"/>
+                                <Image x:Name="Ft3aryVideoCanvas" HorizontalAlignment="Right" Height="122" Margin="10,10,0,0" VerticalAlignment="Top" Width="167" Source="{Binding MainWindowViewModel.SecondaryCanvasSource }"/>
                             </Grid>
                         </Grid>
 
@@ -208,8 +208,9 @@
             <TabItem Header="Settings" Width="80" Height="30" Foreground="WhiteSmoke">
                 <Grid Background="#FF1E1E1E">
                     <StackPanel>
-                      
-                        <Grid>
+                        <StackPanel Orientation="Horizontal">
+                            
+                            <Grid>
                             <StackPanel Orientation="Horizontal">
                                 <!--Top Left-->
                                 <StackPanel>
@@ -221,13 +222,15 @@
                                             <StackPanel Orientation="Horizontal" Margin="20,30,0,0">
                                                 <Label Content="IP/Host" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
                                                 <TextBox x:Name="IpText" HorizontalAlignment="Left" Margin="20,4,0,0" TextWrapping="Wrap"
-                                                            Text="{Binding SettingsViewModel.Config.Ip}" VerticalAlignment="Top" Width="120" />
+                                                            Text="{Binding SettingsViewModel.Config.Ip}" VerticalAlignment="Top" Width="120" 
+                                                         ToolTip="Ip/Hostname of the Relay Server"/>
                                             </StackPanel>
                                             <!--Port-->
                                             <StackPanel Orientation="Horizontal" Margin="20,15,0,0">
                                                 <Label Content="Port" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
                                                 <TextBox x:Name="PortText" HorizontalAlignment="Left" Margin="37,4,0,0" TextWrapping="Wrap"
-                                                            Text="{Binding SettingsViewModel.Config.Port}" VerticalAlignment="Top" Width="120" />
+                                                            Text="{Binding SettingsViewModel.Config.Port}" VerticalAlignment="Top" Width="120" 
+                                                         ToolTip="Port of the Relay Server"/>
                                             </StackPanel>
                                         </StackPanel>
                                         <!--Top Left Right-->
@@ -236,12 +239,14 @@
                                             <StackPanel Orientation="Horizontal" Margin="38,30,0,0">
                                                 <Label  Content="UserName" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
                                                 <TextBox x:Name="UserName" HorizontalAlignment="Left" Margin="27,4,0,0" TextWrapping="Wrap"
-                                                           Text="{Binding SettingsViewModel.Config.Name}" VerticalAlignment="Top" Width="120" />
+                                                           Text="{Binding SettingsViewModel.Config.Name}" VerticalAlignment="Top" Width="120" 
+                                                         ToolTip="Your Username"/>
                                             </StackPanel>
                                             <!--Transport Layer-->
                                             <StackPanel Orientation="Horizontal" Margin="38,13,0,0">
-                                                <Label Content="Transport Layer" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
-                                                <ComboBox x:Name="SoundQuality_Copy" HorizontalAlignment="Left" IsSynchronizedWithCurrentItem="True"
+                                                <Label Content="Transport Layer" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"
+                                                       ToolTip="You can switch during call"/>
+                                                <ComboBox HorizontalAlignment="Left" IsSynchronizedWithCurrentItem="True"
                                                            Margin="1,4,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" 
                                                            SelectedItem="{Binding SettingsViewModel.TransportLayer,Mode=TwoWay}"  >
                                                            <ComboBoxItem  Content="Udp" IsSelected="True"/>
@@ -279,9 +284,9 @@
                                         <!--Latency + Log window-->
                                         <StackPanel Margin="20,10,0,0">
                                             <StackPanel Orientation="Horizontal" Margin="2,0,0,0">
-                                                <TextBlock x:Name="ServerTcpLatency" HorizontalAlignment="Left" Margin="0,0,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="160"
+                                                <TextBlock x:Name="ServerTcpLatency" HorizontalAlignment="Left" Margin="0,0,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="180"
                                                         Text="{Binding SettingsViewModel.TcpLatency}"/>
-                                                <TextBlock x:Name="ServerUdpLatency" HorizontalAlignment="Left" Margin="0,0,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="160"
+                                                <TextBlock x:Name="ServerUdpLatency" HorizontalAlignment="Left" Margin="0,0,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="180"
                                                         Text="{Binding SettingsViewModel.UdpLatency}"/>
                                             </StackPanel>
                                             <TextBox x:Name="Status" HorizontalAlignment="Left" Margin="0,5,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="356" Height="81" 
@@ -291,109 +296,224 @@
 
                                 </StackPanel>
                                 <!--Top Right-->
-                                <StackPanel Orientation="Horizontal">
-                                    <StackPanel Margin="40,34,0,0">
-                                        <CheckBox Content="Auto Reconnect" Foreground="WhiteSmoke" Margin="0,0,0,0"  
+                                    <StackPanel Orientation="Horizontal">
+                                        <StackPanel Margin="40,34,0,0">
+                                            <CheckBox Content="Auto Reconnect" Foreground="WhiteSmoke" Margin="0,0,0,0"  
                                                 IsChecked="{Binding  SettingsViewModel.Config.AutoReconnect}" Height="20"/>
-                                        <CheckBox Content="Auto HolePunch" Foreground="WhiteSmoke" Margin="0,20,0,0" 
+                                            <CheckBox Content="Auto HolePunch" Foreground="WhiteSmoke" Margin="0,20,0,0" 
                                                 IsChecked="{Binding  SettingsViewModel.Config.AutoHolepunch}" Height="20"/>
-                                        
-                                     
-                                    </StackPanel>
-                                    <StackPanel Margin="50,34,0,0">
-                                        <!--<Button Content="Get Ip With Proxy" HorizontalAlignment="Left" Margin="0,38,0,0" VerticalAlignment="Top" Width="104" 
+
+
+                                        </StackPanel>
+                                        <StackPanel Margin="50,34,0,0">
+                                            <!--<Button Content="Get Ip With Proxy" HorizontalAlignment="Left" Margin="0,38,0,0" VerticalAlignment="Top" Width="104" 
                                                 Command="{Binding SettingsViewModel.HTTPProxtIpCommand}"/>-->
-                                        <Button Content="Show Debug Log" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="112" 
+                                            <Button Content="Show Debug Log" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="112" 
                                                 Click="ShowDebugWindow"/>
-                                        <Button Content="Clear Chat History" HorizontalAlignment="Left" Margin="5,20,0,0" VerticalAlignment="Top" Width="112"
+                                            <Button Content="Clear Chat History" HorizontalAlignment="Left" Margin="5,20,0,0" VerticalAlignment="Top" Width="112"
                                                 Command="{Binding SettingsViewModel.ClearChatHistoryCommand}"/>
 
-                                        <Label  Content="File Transport Layer" HorizontalAlignment="Left" Margin="0,38,0,0" VerticalAlignment="Top"/>
-                                        <ComboBox HorizontalAlignment="Left" IsSynchronizedWithCurrentItem="True"
+                                            <Label  Content="File Transport Layer" HorizontalAlignment="Left" Margin="0,38,0,0" VerticalAlignment="Top"/>
+                                            <ComboBox HorizontalAlignment="Left" IsSynchronizedWithCurrentItem="True"
                                                            Margin="5,4,0,0" VerticalAlignment="Top" Width="112" IsReadOnly="True" 
                                                            SelectedItem="{Binding SettingsViewModel.FTTransportLayer,Mode=TwoWay}"  >
-                                            <ComboBoxItem  Content="Udp"/>
-                                            <ComboBoxItem  Content="Tcp" IsSelected="True"/>
-                                        </ComboBox>
-                                        
-                                        <Label  Content="FileTransferChunkSize" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
-                                        <TextBox x:Name="FtChunk" HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap"
+                                                <ComboBoxItem  Content="Udp"/>
+                                                <ComboBoxItem  Content="Tcp" IsSelected="True"/>
+                                            </ComboBox>
+
+                                            <Label  Content="FileTransferChunkSize" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
+                                            <TextBox x:Name="FtChunk" HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap"
                                             Text="{Binding SettingsViewModel.Config.ChunkSize}" VerticalAlignment="Top" Width="112" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
-                            <Rectangle HorizontalAlignment="Left" Height="240"  Stroke="DimGray" VerticalAlignment="Center" Width="800" RadiusX="0" RadiusY="0"/>
+                            <Rectangle HorizontalAlignment="Left" Height="240"  Stroke="DimGray" VerticalAlignment="Top" Width="802" RadiusX="0" RadiusY="0" Margin="0,2,0,2"/>
                         </Grid>
+                            <Image HorizontalAlignment="Left" Height="auto" MaxHeight="240" Margin="2,2,0,2" VerticalAlignment="Top" Width="auto" MaxWidth="400" Source="{Binding MainWindowViewModel.PrimaryCanvasSource }" />
+
+                        </StackPanel>
                         <!--Bottom-->
-                        <Grid HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="240" >
-                            <StackPanel Orientation="Horizontal">
-                                <Grid HorizontalAlignment="Left" >
+                        <Grid HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="350" >
+                            <StackPanel Orientation="Horizontal" >
+                                <Grid HorizontalAlignment="Left" Width="400">
                                     <StackPanel>
-                                        <Label Content="Video Settings" HorizontalAlignment="Center" Margin="0,1,0,0" VerticalAlignment="Top" FontWeight="Bold"/>
-                                        <CheckBox IsChecked="{Binding SettingsViewModel.EnableCongestionControl, Mode=TwoWay}"  Content="Enable Congestion Control" Foreground="WhiteSmoke"
-                                                  Margin="7,10,0,0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-
-                                        <StackPanel Orientation="Horizontal">
-                                            <Label Content="Image Quality" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
-                                            <Label Content="{Binding SettingsViewModel.ActualImageQuality}" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
-                                        </StackPanel>
-                                        <Slider x:Name="VideoQualitySlider" HorizontalAlignment="Left" Margin="7,0,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"
-                                            Value="{Binding SettingsViewModel.ImageQualitySliderValue, Mode=TwoWay}" Maximum="100" />
-
-                                        <Label Content="FPS" HorizontalAlignment="Left" Margin="6,0,0,0" VerticalAlignment="Top"/>
-                                        <Slider HorizontalAlignment="Center" Margin="0,0,0,0" VerticalAlignment="Top" Width="186" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Minimum="5" Maximum="60" 
+                                        <Label Content="Camera Settings" HorizontalAlignment="Center" Margin="0,1,0,0" VerticalAlignment="Top" FontWeight="Bold"/>
+        
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,-10">
+                                            <Label Content="FPS" HorizontalAlignment="Left" Margin="0,-5,20,0" VerticalAlignment="Top"/>
+                                            <Slider Margin="0,0,0,0" VerticalAlignment="Top" HorizontalAlignment="Right" Width="150" AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Minimum="5" Maximum="60" 
                                             Value="{Binding SettingsViewModel.FpsSliderValue}"/>
-
-                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                            <Label Content="CompressionType:" HorizontalAlignment="Left" Margin="2,0,0,0" VerticalAlignment="Top"/>
-                                            <ComboBox HorizontalAlignment="Left" Margin="0,2,0,0" VerticalAlignment="Top" Width="72" IsReadOnly="True" 
-                                                    SelectedItem="{Binding SettingsViewModel.CompressionFormat, Mode=TwoWay}" IsSynchronizedWithCurrentItem="True">
-                                                <ComboBoxItem Content="Webp" IsSelected="True"/>
-                                                <ComboBoxItem Content="Jpg"/>
-                                            </ComboBox>
                                         </StackPanel>
-
-                                        <Label Content="{Binding SettingsViewModel.ImageTransferRate}" HorizontalAlignment="Left" Margin="5,15,0,0" VerticalAlignment="Bottom" Width="182"/>
-                                        <Label Content="{Binding SettingsViewModel.AverageLatency}" HorizontalAlignment="Left" Margin="5,-10,0,0" VerticalAlignment="Top" Width="182"/>
-                                    </StackPanel>
-
-                                    <Rectangle HorizontalAlignment="Left" Height="240" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="3.944" RadiusY="3.944"/>
-                                </Grid>
-                                <Grid Width="4"/>
-                                <Grid HorizontalAlignment="Left">
-                                    <StackPanel>
-
-                                        <TextBlock HorizontalAlignment="Center" Margin="5,5,0,0" TextWrapping="Wrap" 
-                                             Text="Camera Settings" VerticalAlignment="Top" FontWeight="Bold"/>
-
-                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+                                                    ToolTip="Device Index in your system.&#x0a;Use if you have multiple cameras">
+                                            <Label Content="Camera Index: " Margin="0,0,45,0" HorizontalAlignment="Left"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.CameraIndex}" Margin="0,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
                                             <Label Content="Capture Width: " Margin="0,0,40,0" HorizontalAlignment="Left"/>
-                                            <TextBox Text="{Binding SettingsViewModel.CamFrameWidth}" Margin="0,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.CamFrameWidth}" Margin="0,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
                                             <Label Content="Capture Height: " Margin="0,0,36,0" HorizontalAlignment="Left"/>
-                                            <TextBox Text="{Binding SettingsViewModel.CamFrameHeight}" Margin="0,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.CamFrameHeight}" Margin="0,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
-                                        <Button Content="Apply" HorizontalAlignment="Left" Margin="5,20,0,0" VerticalAlignment="Top" Width="185"
-                                     Command="{Binding SettingsViewModel.ApplyCameraSettingsCmd}"/>
+                                        
+                                        <Label Content="H264 Encoding Settings" HorizontalAlignment="Left" Margin="6,10,0,-10" VerticalAlignment="Top" FontWeight="DemiBold"/>
+                                        <Rectangle Stroke="DimGray" Width="190" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,10,0,0"/>
+                                        <CheckBox IsChecked="{Binding SettingsViewModel.Config.EnableCongestionAvoidance, Mode=TwoWay}"  Content="Enable Congestion Aviodance" Foreground="WhiteSmoke"
+                                                  Margin="5,5,0,-0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                  ToolTip="Activates congestion avoidance algorithms. Reduces the image quality if congestion is detected.&#x0a;If you are having long distance call over Internet its recommended"/>
+                                        <CheckBox IsChecked="{Binding SettingsViewModel.Config.ReliableIDR, Mode=TwoWay}"  Content="Reliable IDR" Foreground="WhiteSmoke"
+                                                  Margin="5,5,0,-0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                  ToolTip="Enables reliable sends on I(Intra) and IDR(Instantaneous Decoder Refresh) frames."/>
+                                       
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
+                                                    ToolTip="Represents in how many frames, an IDR(Instantaneous Decoder Refresh) Frame will be forced on encoder.&#x0a; Provides better stability on lossy connections, but increases the bandwith&#x0a;use -1 for automatic" >
+                                            <Label Content="IDR Interval: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="106"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.IdrInterval}" Margin="10,4,10,0" Width="40," Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
+                                                    ToolTip="Target bitrate of the encoder. Encoder tries to stay under this limit by rate control">
+                                            <Label Content="Camera Target Kbps: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="130"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.TargetBps}" Margin="-14,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
+                                                    ToolTip="Default is recomended. Advanced disables frame skipping for rate control">
+                                            <Label Content="Configuration:" HorizontalAlignment="Left" Margin="2,0,0,0" VerticalAlignment="Top"/>
+                                            <ComboBox HorizontalAlignment="Left" Margin="22,2,0,0" VerticalAlignment="Top" Width="82" IsReadOnly="True" 
+                                                    SelectedItem="{Binding SettingsViewModel.H264Config}" IsSynchronizedWithCurrentItem="True">
+                                                <ComboBoxItem Content="Default" IsSelected="True"/>
+                                                <ComboBoxItem Content="Advanced"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel>
+                                     
+                                        <Grid Width="200" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,30,0,0" Height="155" >
+                                            <Label Content="Test" HorizontalAlignment="Left" Margin="8,0,0,0" VerticalAlignment="Bottom" Width="50"/>
+                                            <ToggleButton x:Name="CamToggle" Style="{StaticResource ToggleSwitchStyleCam}"  HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="19" Width="40" Background="IndianRed" 
+                                                          Margin="40,0,0,2" WindowChrome.IsHitTestVisibleInChrome="True" 
+                                                          IsChecked="{Binding SettingsViewModel.TestCamChecked,Mode=TwoWay}"/>
+                                            <Label Content="{Binding SettingsViewModel.MaxBps}" HorizontalAlignment="Right" Margin="0,0,0,0" VerticalAlignment="Bottom" Width="120"
+                                                   ToolTip="Represents actual max bitrate limit after congestion control"/>
+
+                                            <Label Content="16x" Margin="-20,-10,0,0" HorizontalAlignment ="Center" VerticalAlignment="Top"/>
+                                            <Label Content="12x" Margin="0,-10,8,0" HorizontalAlignment ="Right" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                <Label.RenderTransform>
+                                                    <TransformGroup>
+                                                        <ScaleTransform/>
+                                                        <SkewTransform/>
+                                                        <RotateTransform Angle="90"/>
+                                                        <TranslateTransform/>
+                                                    </TransformGroup>
+                                                </Label.RenderTransform>
+                                            </Label>
+                                            <Rectangle HorizontalAlignment="Left" Height="120" Stroke="DimGray" VerticalAlignment="Top" Width="160" Margin="10,10,0,0"/>
+                                            <Image HorizontalAlignment="Left" Height="120" Margin="10,10,0,0" VerticalAlignment="Top" Width="160" Source="{Binding MainWindowViewModel.SecondaryCanvasSource }" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0">
+                                            <Label Content="Congestion" HorizontalAlignment="Right"></Label>
+                                            <ProgressBar HorizontalAlignment="Right" Height="10" Margin="5,10,30,0" VerticalAlignment="Top" Width="85" Background="Black"
+                                                    Value="{Binding SettingsViewModel.Congestion}" Foreground="DarkRed" Opacity="0.8"/>
+                                        </StackPanel>
+                                       
+                                        <Grid HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,0,0">
+                                            <StackPanel>
+                                                <Rectangle Stroke="DimGray" Width="189" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,10,2,0"/>
+
+                                                <Label Content="{Binding SettingsViewModel.ImageTransferRate}" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Bottom" Width="182"/>
+                                                <Label Content="{Binding SettingsViewModel.OutgoingFrameRate}" HorizontalAlignment="Left" Margin="0,-10,0,0" VerticalAlignment="Top" Width="182"/>
+                                                <Rectangle Stroke="DimGray" Width="189" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0"/>
+                                                <Label Content="{Binding SettingsViewModel.IncomingImageDataRate }" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top" Width="182"/>
+                                                <Label Content="{Binding SettingsViewModel.IncomingFrameRate}" HorizontalAlignment="Left" Margin="0,-10,0,0" VerticalAlignment="Top" Width="182"/>
+                                                <Label Content="{Binding SettingsViewModel.AverageLatency}" HorizontalAlignment="Left" Margin="0,-10,0,0" VerticalAlignment="Top" Width="182"/>
+
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                    <Button Content="Apply" HorizontalAlignment="Left" Margin="5,20,0,10" VerticalAlignment="Bottom" Width="185"
+                                                Command="{Binding SettingsViewModel.ApplyCameraSettingsCmd}"/>
+                                    <Rectangle HorizontalAlignment="Left" Height="350" Stroke="DimGray" VerticalAlignment="Center" Width="400" RadiusX="3.944" RadiusY="3.944"/>
+
+                                </Grid>
+                                <Grid Width="1"/>
+                                <Grid HorizontalAlignment="Left" Width="200">
+                                    <StackPanel>
+
+                                        <TextBlock HorizontalAlignment="Center" Margin="5,5,0,9" TextWrapping="Wrap" 
+                                             Text="Screen Capture Settings" VerticalAlignment="Top" FontWeight="Bold"/>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                            <Label Content="Target Kbps: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="140"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.SCTargetBps}" Margin="-24,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                            <Label Content="Target Fps: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="140"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.SCTargetFps}" Margin="-24,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                            <Label Content="Screen Id: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="106"
+                                                   ToolTip="Determines which screen to capture on multi-monitor systems"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.ScreenId}" Margin="10,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                       
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
+                                                    ToolTip="Keep it 0 unless you have multi-gpu system">
+                                            <Label Content="GPU Id: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="106"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.GpuId}" Margin="10,4,10,0" Width="40," Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        
+                                        
+                                        <StackPanel Orientation="Vertical"
+                                                     ToolTip="If Native Screen Resolution is bigger than selected,&#x0a;system will scale down to the limit while preserving the aspect ratio">
+                                            <Label Content="Screen Capture Resolution Limit:" HorizontalAlignment="Left"
+                                                   Margin="2,0,0,0" VerticalAlignment="Top"/>
+                                            <ComboBox HorizontalAlignment="Left" Margin="8,2,0,0" VerticalAlignment="Top" Width="80" IsReadOnly="True" 
+                                                    SelectedItem="{Binding SettingsViewModel.SCResolution}" IsSynchronizedWithCurrentItem="True">
+                                                <ComboBoxItem Content="_2180p"/>
+                                                <ComboBoxItem Content="_2080p"/>
+                                                <ComboBoxItem Content="_1440p"/>
+                                                <ComboBoxItem Content="_1180p" IsSelected="True"/>
+                                                <ComboBoxItem Content="_1080p" />
+                                                <ComboBoxItem Content="_960p" />
+                                                <ComboBoxItem Content="_840p"/>
+                                                <ComboBoxItem Content="_720p"/>
+                                                <ComboBoxItem Content="_480p"/>
+                                            </ComboBox>
+                                            <!--TestSCChecked-->
+                                        </StackPanel>
+
+                                        <CheckBox IsChecked="{Binding SettingsViewModel.Config.MultiThreadedScreenShare, Mode=TwoWay}"  Content="Enable MultiThreading" Foreground="WhiteSmoke"
+                                                  Margin="7,10,0,0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                  ToolTip="Enables parallel pipeline for screen capture and encoding. Uses more CPU for better frame rates"/>
+                                        <Grid Margin="-5,0,0,0">
+                                            <Label Content="Test" HorizontalAlignment="Left" Margin="8,0,0,0" VerticalAlignment="Bottom" Width="50"/>
+                                            <ToggleButton Style="{StaticResource ToggleSwitchStyleCam}"  HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="19" Width="40" Background="IndianRed" 
+                                                          Margin="40,0,0,2" WindowChrome.IsHitTestVisibleInChrome="True" 
+                                                          IsChecked="{Binding SettingsViewModel.TestSCChecked,Mode=TwoWay}"/>
+                                        </Grid>
+                                        
 
                                     </StackPanel>
-                                    <Rectangle HorizontalAlignment="Left" Height="240" Margin="0,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                                    <Button Content="Apply" HorizontalAlignment="Left" Margin="5,0,0,10" VerticalAlignment="Bottom" Width="185"
+                                     Command="{Binding SettingsViewModel.ApplyCameraSettingsCmd}"/>
+                                    <Rectangle HorizontalAlignment="Left" Height="350" Margin="0,0,0,0" Stroke="DimGray" VerticalAlignment="Center" Width="200" RadiusX="4.167" RadiusY="4.167"/>
                                 </Grid>
-                                <Grid Width="4"/>
-                                <Grid HorizontalAlignment="Left">
+                                <Grid Width="1"/>
+                                <Grid HorizontalAlignment="Left" Width="200">
                                     <StackPanel>
                                         <Label Content="Audio Settings" HorizontalAlignment="Center"  VerticalAlignment="Top" FontWeight="Bold"/>
 
                                         <CheckBox Foreground="WhiteSmoke" Content="Listen Yourself" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" 
                                             IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
-                                        <CheckBox Foreground="WhiteSmoke" Content="SendDoubleAudio" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" 
-                                            IsChecked="{Binding SettingsViewModel.SendDoubleAudiocheck}"/>
+                                        <!--<CheckBox Foreground="WhiteSmoke" Content="SendDoubleAudio" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" 
+                                            IsChecked="{Binding SettingsViewModel.SendDoubleAudiocheck}"/>-->
 
-                                        <StackPanel>
+                                        <StackPanel Margin="0,10,0,0">
                                             <Label Content="Volume" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
                                             <Slider HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="185" 
-                                                    AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="50"
+                                                    AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="2.5"
                                             Value="{Binding SettingsViewModel.VolumeValue}"/>
                                         </StackPanel>
 
@@ -401,25 +521,33 @@
                                         <Label Content="Jitter Buffer Duration" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
                                         <Slider HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="185" 
                                                 AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="600" Minimum="60"
-                                                Value="{Binding SettingsViewModel.BufferDurationValue}"/>
-                                        
+                                                Value="{Binding SettingsViewModel.BufferDurationValue}"
+                                                ToolTip="Jitter buffer duration represents maximum allowed time to wait for a missing audio sample in miliseconds"/>
+
                                         <!--<TextBlock HorizontalAlignment="Center" Margin="0,10,0,0" TextWrapping="Wrap" Text="Audio Statistics"  FontWeight="Bold" VerticalAlignment="Top"/>-->
                                         <StackPanel Orientation="Horizontal" Margin="0,32,0,0">
                                             <TextBlock HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap" Text="Buffer Level" VerticalAlignment="Top"/>
                                             <ProgressBar HorizontalAlignment="Left" Height="10" Margin="20,4,0,0" VerticalAlignment="Top" Width="100" Background="Black"
-                                                    Value="{Binding SettingsViewModel.BufferedDurationPercentage}"/>
+                                                    Value="{Binding SettingsViewModel.BufferedDurationPercentage}"
+                                                         ToolTip="Total Audio time buffered. Its automatically adjusted depending on network jitter"/>
+
                                         </StackPanel>
+                                       
                                         <TextBlock HorizontalAlignment="Left" Margin="5,5,0,0" TextWrapping="Wrap" 
                                                 Text="{Binding SettingsViewModel.TotalNumLostPackages}" VerticalAlignment="Top"/>
 
-                                        <!--<CheckBox Foreground="WhiteSmoke" Content="Send Reliable" HorizontalAlignment="Left" Margin="5,200,0,0" VerticalAlignment="Top" 
-                                  IsChecked="{Binding SettingsViewModel.SendReliable}"  />-->
+                                        <!--<ProgressBar HorizontalAlignment="Left" Height="10" Margin="5,4,0,0" VerticalAlignment="Top" Width="190" Background="Black"
+                                                    Value="{Binding SettingsViewModel.ALvl}" Foreground="#FF6DB006"/>-->
+
+
                                     </StackPanel>
-                                    <Rectangle HorizontalAlignment="Left" Height="240"  Stroke="DimGray" VerticalAlignment="Center" Width="197" RadiusX="4.167" RadiusY="4.167"/>
+                                    <Rectangle HorizontalAlignment="Left" Height="350"  Stroke="DimGray" VerticalAlignment="Center" Width="200" RadiusX="4.167" RadiusY="4.167"/>
 
                                 </Grid>
-                               
+                                <!--<Image HorizontalAlignment="Left" Height="auto" Margin="2,2,0,57" VerticalAlignment="Top" Width="auto" Source="{Binding MainWindowViewModel.SecondaryCanvasSource }" />-->
+
                             </StackPanel>
+
                         </Grid>
                     </StackPanel>
                 </Grid>

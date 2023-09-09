@@ -1,10 +1,9 @@
 ﻿using MessageProtocol;
 using NetworkLibrary;
 using NetworkLibrary.Utils;
-using OpenCvSharp;
-using OpenCvSharp.Extensions;
 using Protobuff;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -12,12 +11,13 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using System.Windows.Shell;
-using Videocall.Services.HttpProxy;
 using Videocall.Services.Latency;
 using Videocall.Services.ScreenShare;
+using Videocall.Services.Video.H264;
 using Videocall.Settings;
-
+using Windows.UI.Composition.Scenes;
 
 namespace Videocall
 {
@@ -29,7 +29,7 @@ namespace Videocall
 
         AudioHandler AudioHandler { get; set; }
 
-        VideoHandler VideoHandler { get; set; }
+        VideoHandler2 VideoHandler { get; set; }
 
         FileShare FileShare { get; set; }
 
@@ -39,38 +39,36 @@ namespace Videocall
         private CameraWindow cameraWindow = new CameraWindow();
         private bool restoreForDragMove;
 
-        SimpleScreenShareHandler ScreenShareHandler =  new SimpleScreenShareHandler();
+        ScreenShareHandlerH264 ScreenShareHandler;
         private System.Windows.Forms.NotifyIcon _notifyIcon;
 
-        // DebugLogWindow debugwindow =  new DebugLogWindow();
         public MainWindow()
         {
-            InitializeComponent();
+            Environment.SetEnvironmentVariable("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0");
 
-            AudioHandler =  new AudioHandler();
-            VideoHandler = new VideoHandler();
-            FileShare =  new FileShare();
-            MessageHandler= new MessageHandler();
-            LatencyPublisher = new LatencyPublisher(MessageHandler);
-            MiniLogger.AllLog += (string s) => DebugLogWindow.AppendLog("any",s);
-            //AudioHandler.StartMic();
-            AudioHandler.StartSpeakers();
+            MiniLogger.AllLog += (string s) => DebugLogWindow.AppendLog("any", s);
+            MiniLogger.AllLog += Console.WriteLine;
 
-            ServiceHub hub = new ServiceHub(AudioHandler, VideoHandler, MessageHandler, FileShare,LatencyPublisher, ScreenShareHandler);
+            ServiceHub hub = ServiceHub.Instance;
+            AudioHandler = hub.AudioHandler;
+            VideoHandler = hub.VideoHandler;
+            FileShare = hub.FileShare;
+            MessageHandler = hub.MessageHandler;
+            LatencyPublisher = hub.LatencyPublisher;
+            ScreenShareHandler = hub.ScreenShareHandler;
 
-            MainWindowViewModel = new MainWindowViewModel(hub);
-            MainWindowViewModel.SrollToEndChatWindow += () => {
+            MainWindowViewModel = new MainWindowViewModel();
+            MainWindowViewModel.SrollToEndChatWindow += () =>
+            {
                 ChatView.SelectedIndex = ChatView.Items.Count == 0?0: ChatView.Items.Count - 1;
                 ChatView.ScrollIntoView(ChatView.SelectedItem);
-                
             };
-            SettingsViewModel = new SettingsViewModel(hub);
+            SettingsViewModel =  SettingsViewModel.Instance;
 
             DataContext= this;
             cameraWindow.DataContext = MainWindowViewModel;
 
-            //MainWindowViewModel.MicroponeChecked = true;
-            HandleScreenshare();
+            InitializeComponent();
 
             var chr = new WindowChrome();
             chr.ResizeBorderThickness=new Thickness(10,10,10,10);
@@ -83,80 +81,14 @@ namespace Videocall
 
             Task.Run(async () => { await Task.Delay(50); DispatcherRun(() => CameraButton.IsChecked = true); });
             Task.Run(async () => { await Task.Delay(50); DispatcherRun(() => SoundButton.IsChecked = true); });
-
-         
             Task.Run(async() => { await Task.Delay(1000); scrollActive = true; });
+
             CallStateManager.StaticPropertyChanged += OnCallStateChanged;
             ChatHideButton.Visibility = Visibility.Hidden;
             PeersHideButton.Visibility = Visibility.Hidden;
             CamGridColumn.Width = new GridLength(0, GridUnitType.Star);
         }
 
-        private void HandleScreenshare()
-        {
-            ScreenShareHandler.LocalImageAvailable += (bytes, image) =>
-            {
-                var env = new MessageEnvelope();
-                env.Header = "ScreenShareImage";
-                env.Payload = bytes;
-                MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env,false);
-
-                DispatcherRun(() => {
-
-                    if (MainWindowViewModel.SecondaryCanvasSource == null
-                      || image.Width != MainWindowViewModel.SecondaryCanvasSource.Width
-                      || image.Height != MainWindowViewModel.SecondaryCanvasSource.Height)
-                        MainWindowViewModel.SecondaryCanvasSource = image.ToBitmapSource();
-                    else
-                    {
-                        var dst = (System.Windows.Media.Imaging.WriteableBitmap)MainWindowViewModel.SecondaryCanvasSource;
-                        dst.Lock();
-                        int width = image.Width;
-                        int height = image.Height;
-                        int step = (int)image.Step();
-                        long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
-
-                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
-                        dst.Unlock();
-                        image.Dispose();
-                    }
-                });
-
-            };
-
-            MessageHandler.OnMessageAvailable += (message) =>
-            {
-                if (message.Header == "ScreenShareImage")
-                {
-                    ScreenShareHandler.HandleNetworkImageBytes(message.Payload, message.PayloadOffset, message.PayloadCount);
-                }
-            };
-
-            ScreenShareHandler.RemoteImageAvailable += (image) =>
-            {
-                DispatcherRun(() =>
-                {
-                    if (MainWindowViewModel.PrimaryCanvasSource == null
-                    || image.Width != MainWindowViewModel.PrimaryCanvasSource.Width
-                    || image.Height != MainWindowViewModel.PrimaryCanvasSource.Height)
-                        MainWindowViewModel.PrimaryCanvasSource = image.ToBitmapSource();
-                    else
-                    {
-                        var dst = (System.Windows.Media.Imaging.WriteableBitmap)MainWindowViewModel.PrimaryCanvasSource;
-                        dst.Lock();
-                        int width = image.Width;
-                        int height = image.Height;
-                        int step = (int)image.Step();
-                        long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
-
-                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
-                        dst.Unlock();
-                        image.Dispose();
-                    }
-
-                });
-            };
-        }
 
         private void DispatcherRun(Action todo)
         {
@@ -200,20 +132,23 @@ namespace Videocall
 
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            //string ex = e.Exception.Message + e.Exception.StackTrace;
-            //string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            //File.AppendAllText(workingDir + "/CrashDump.txt", ex);
+            string ex = "Current_DispatcherUnhandledException ["+ DateTime.Now.ToString()+"]\n";
+             ex += e.Exception.Message + e.Exception.StackTrace;
+            string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            File.AppendAllText(workingDir + "/CrashDump.txt", ex);
             Environment.Exit(0);
         }
 
         private void CurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            string ex = ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
+            string ex = "CurrentDomainUnhandledException [" + DateTime.Now.ToString() + "]\n";
+             ex+= ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
             string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             File.AppendAllText(workingDir + "/CrashDump.txt", ex);
             MessageHandler.Disconnect();
 
             VideoHandler.CloseCamera();
+            ScreenShareHandler.StopCapture();
         }
 
         #endregion
@@ -320,7 +255,6 @@ namespace Videocall
           
             
         }
-
 
         #region Chat window 
         private void ChatMessageBox_GotFocus(object sender, RoutedEventArgs e)

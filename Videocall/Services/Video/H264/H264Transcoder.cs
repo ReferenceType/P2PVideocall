@@ -1,4 +1,9 @@
-﻿using System;
+﻿using NetworkLibrary;
+using NetworkLibrary.Components;
+using OpenCvSharp;
+using H264Sharp;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -6,59 +11,430 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.Preview.Notes;
+using static H264Sharp.Encoder;
+using System.Windows.Media.Animation;
 
 namespace Videocall.Services.Video.H264
 {
+   
     internal class H264Transcoder
     {
-        private const string DllName = "openh264-2.1.1-win32.dll";
-        public static OpenH264Lib.Encoder SetupEncoder(int width, int height, OpenH264Lib.Encoder.OnEncodeCallback callback = null,
-           int fps = 30, int bps = 5000_000, float keyFrameInterval = 2.0f)
+       
+        public Action<Action<PooledMemoryStream>, int,bool> EncodedFrameAvailable2;
+        private H264Sharp.Encoder encoder;
+        private H264Sharp.Decoder decoder;
+        public Action<byte[], int> EncodedFrameAvailable;
+        public Action<Mat> DecodedFrameAvailable;
+        public Action KeyFrameRequested;
+        public ConcurrentBag<Mat> matPool;
+        public bool DecodeNoDelay = false;
+        public bool InvokeAction => EncodedFrameAvailable2!=null;
+        public double Duration => jitterBufffer.Duration;
+        private int bytesSent = 0;
+        private JitterBufffer jitterBufffer = new JitterBufffer();
+        private object locker1 = new object();
+        private object locker = new object();
+        private object changeLock = new object();
+        private byte[] cache = new byte[64000];
+        private int keyReq=0;
+        private int fps;
+        private int bps;
+        private ushort seqNo = 0;
+        public ushort encoderWidth { get; private set; }
+        public ushort encoderHeight { get; private set; }
+        private ushort decoderWidth;
+        private ushort decoderHeight;
+        private int frameCnt = 0;
+        private int keyFrameInterval = -1;
+        public H264Transcoder(ConcurrentBag<Mat> matPool,int desiredFps,int desiredBps)
         {
-            OpenH264Lib.Encoder encoder = new OpenH264Lib.Encoder(DllName);
+            this.matPool = matPool;
+            fps = desiredFps;
+            bps = desiredBps;
+            jitterBufffer.FrameAvailable += (f) => Decode(f.Data, f.Offset, f.Count);
+        }
+        public H264Transcoder(int desiredFps, int desiredBps)
+        {
+            fps = desiredFps;
+            bps = desiredBps;
+            jitterBufffer.FrameAvailable += (f) => Decode2(f.Data, f.Offset, f.Count);
+        }
 
-            if (callback == null)
+        public unsafe void SetupTranscoder(int encoderWidth, int encoderHeight, ConfigType configType = ConfigType.CameraBasic)
+        {
+            if (encoder != null)
             {
-                callback = (data, length, frameType) =>
+                encoder.Dispose();
+            }
+            encoder = H264TranscoderProvider.SetupEncoderUnsafe(encoderWidth, encoderHeight, fps: fps, bps: bps, configType);
+            if (decoder == null)
+                decoder = H264TranscoderProvider.SetupDecoder();
+            this.encoderWidth =(ushort) encoderWidth;
+            this.encoderHeight = (ushort)encoderHeight;
+        }
+
+        private void DisposeTranscoder()
+        {
+            var encoder = this.encoder;
+            this.encoder = null;
+            encoder.Dispose();
+            var decoder = this.decoder;
+            this.decoder = null;
+            decoder.Dispose();
+
+        }
+
+        private void OnEncoded(EncodedFrame[] frames )
+        {
+            int length = 0;
+            bool isKeyFrame = false;
+            foreach (var f in frames)
+            {
+                length += f.Length;
+                if (f.Type == FrameType.IDR || f.Type == FrameType.I)
                 {
-                    var keyFrame = (frameType == OpenH264Lib.Encoder.FrameType.IDR) || (frameType == OpenH264Lib.Encoder.FrameType.I);
-
-                    Console.WriteLine("Encord {0} bytes, KeyFrame:{1}", length, keyFrame);
-                };
+                    isKeyFrame = true;
+                }
             }
+            if (length == 0)
+                return;
+            bytesSent += length;
+            if (!InvokeAction)
+                PublishFrame(frames, length, isKeyFrame);
+            else
+                PublishFrameWithAction(frames, length, isKeyFrame);
 
-
-            encoder.Setup(width, height, bps, 30, keyFrameInterval, callback);
-            return encoder;
         }
 
-        public static OpenH264Lib.Decoder SetupDecoder()
+        private void PublishFrame(EncodedFrame[] frames, int length, bool isKeyFrame)
         {
-            OpenH264Lib.Decoder decoder = new OpenH264Lib.Decoder(DllName);
-            return decoder;
-            //var bmp = decoder.Decode(data, length);
+
+            if (cache.Length < length*2)
+                cache = new byte[length*2];
+
+            int offset = 0;
+            WriteMetadata(cache, ref offset);
+            foreach (var frame in frames)
+            {
+                frame.CopyTo(cache, offset);
+                offset += frame.Length;
+            }
+
+            EncodedFrameAvailable?.Invoke(cache, length+offset);
+
         }
 
-        public static void EndoceDecodeTest()
+        // This black magic writes directly to socket buffer
+        private void PublishFrameWithAction(EncodedFrame[] frames, int length, bool isKeyFrame)
         {
-            var paths = Directory.GetFiles(@"C:\Users\dcano\Desktop\Frames");
-            var decoder = SetupDecoder();
-            int k = 0;
-            OpenH264Lib.Encoder.OnEncodeCallback callback = (data, length, frameType) =>
+            EncodedFrameAvailable2?.Invoke( Stream => 
             {
-                var keyFrame = (frameType == OpenH264Lib.Encoder.FrameType.IDR) || (frameType == OpenH264Lib.Encoder.FrameType.I);
-                var bmp = decoder.Decode(data, length);
-                if (bmp != null)
-                    bmp.Save(@"C:\Users\dcano\Desktop\Decoded\" + Interlocked.Increment(ref k) + ".bmp");
-                //Console.WriteLine("Encord {0} bytes, KeyFrame:{1}", length, keyFrame);
-            };
-            var encoder = SetupEncoder(640, 480, callback);
+                Stream.Reserve(length + 50);
+                var cache = Stream.GetBuffer();
+                int offset = Stream.Position32;
+                
+                WriteMetadata(cache, ref offset);
+                foreach(var frame in frames)
+                {
+                    frame.CopyTo(cache, offset);
+                    offset += frame.Length;
+                }
+                Stream.Position32 = offset;
+            }, length, isKeyFrame);
+            
 
-            for (int i = 0; i < paths.Length; i++)
+        }
+
+        private void WriteMetadata(byte[] cache, ref int offset)
+        {
+            lock (locker)// its uint16 no interlocked support
+                seqNo++;
+            PrimitiveEncoder.WriteFixedUint16(cache, offset, seqNo);
+            PrimitiveEncoder.WriteFixedUint16(cache, offset+2, encoderWidth);
+            PrimitiveEncoder.WriteFixedUint16(cache, offset+4, encoderHeight);
+            offset+= 6;
+
+        }
+        public unsafe void Encode(BgraImage bgra)
+        {
+            if (keyFrameInterval != -1 && frameCnt++ > keyFrameInterval)
             {
-                var frame = new Bitmap(paths[i]);
-                encoder.Encode(frame);
+                lock (changeLock)
+                    encoder.ForceIntraFrame();
+                frameCnt = 0;
             }
+
+            lock (changeLock)
+            {
+                if (encoder.Encode(bgra, out EncodedFrame[] frames))
+                {
+                      OnEncoded(frames);
+                }
+            }
+        }
+        public void Encode(BgrImage bgr)
+        {
+            if (keyFrameInterval != -1 && frameCnt++ > keyFrameInterval)
+            {
+                lock (changeLock)
+                    encoder.ForceIntraFrame();
+                frameCnt = 0;
+            }
+
+            lock (changeLock)
+            {
+                if (encoder.Encode(bgr, out EncodedFrame[] frames))
+                {
+                     OnEncoded(frames);
+                }
+            }
+        }
+        public void Encode(RgbImage rgb)
+        {
+            if (keyFrameInterval != -1 && frameCnt++ > keyFrameInterval)
+            {
+                lock (changeLock)
+                    encoder.ForceIntraFrame();
+                frameCnt = 0;
+            }
+
+            lock (changeLock)
+            {
+                if (encoder.Encode(rgb, out EncodedFrame[] frames))
+                {
+                      OnEncoded(frames);
+                }
+            }
+        }
+        public unsafe void Encode(byte* Yuv420p)
+        {
+            if(keyFrameInterval != -1 && frameCnt++ >keyFrameInterval)
+            {
+                lock (changeLock)
+                    encoder.ForceIntraFrame();
+                frameCnt = 0;
+            }
+
+            lock (changeLock)
+            {
+                if (encoder.Encode(Yuv420p, out EncodedFrame[] frames))
+                {
+                     OnEncoded(frames);
+                }
+            }
+        }
+        public void Encode(Bitmap bmp)
+        {
+            if (keyFrameInterval!= -1 && frameCnt++ > keyFrameInterval)
+            {
+                lock (changeLock)
+                    encoder.ForceIntraFrame();
+                frameCnt = 0;
+            }
+           
+            lock (changeLock)
+            {
+                if (encoder.Encode(bmp,out EncodedFrame[] frames))
+                {
+                        OnEncoded(frames);
+                }
+            }
+               
+        }
+        internal void ForceIntraFrame()
+        {
+            lock (changeLock)
+                encoder.ForceIntraFrame();
+        }
+        public void SetKeyFrameInterval(int everyNFrame)
+        {
+            keyFrameInterval = everyNFrame;
+        }
+
+        public void SetTargetBps(int bps)
+        {
+            lock (changeLock)
+                encoder?.SetMaxBitrate(bps);
+        }
+       public void SetTargetFps(float fps)
+        {
+            lock (changeLock)
+                encoder?.SetTargetFps(fps);
+        }
+        // Decode
+        // Goes to jitter, jitter publises, then decode is called.
+        internal unsafe void HandleIncomingFrame( DateTime timeStamp, byte[] payload, int payloadOffset, int payloadCount)
+        {
+            ushort sqn = BitConverter.ToUInt16(payload, payloadOffset);
+            ushort w = BitConverter.ToUInt16(payload, payloadOffset+2);
+            ushort h = BitConverter.ToUInt16(payload, payloadOffset+4);
+            if(encoderWidth == 0)
+            {
+                decoderWidth = w; decoderHeight = h;
+
+            }
+            if (decoderWidth !=w || decoderHeight != h)
+            {
+                lock (changeLock)
+                {
+                    decoderWidth = w; 
+                    decoderHeight = h;
+                    decoder.Dispose();
+                    decoder = H264TranscoderProvider.SetupDecoder();
+                    jitterBufffer.Reset();
+                }
+               
+            }
+            payloadOffset += 6;
+            payloadCount-= 6;
+
+            jitterBufffer.HandleFrame(timeStamp, sqn, payload, payloadOffset, payloadCount);
+        }
+        private unsafe void Decode(byte[] payload, int payloadOffset, int payloadCount)
+        {
+            lock (changeLock)
+            {
+                fixed (byte* b = &payload[payloadOffset])
+                {
+                    if (decoder == null)
+                        decoder = H264TranscoderProvider.SetupDecoder();
+
+                    Mat mainMat = null;
+                    try
+                    {
+                        if (decoder.Decode(b, payloadCount, noDelay: DecodeNoDelay, out DecodingState statusCode, out RgbImage rgbImg))
+                        {
+                            var ptr = new IntPtr(rgbImg.ImageBytes);
+                            var mat = new Mat(rgbImg.Height, rgbImg.Width, MatType.CV_8UC3, ptr);
+
+                            mainMat = mat;
+                            if (matPool.TryTake(out var pooledMat)) 
+                            { 
+
+                                try
+                                {
+                                    //TODO check size, bounds etc..
+                                    if (pooledMat.Size() == mat.Size() && !pooledMat.IsDisposed)
+                                        mat.CopyTo(pooledMat);
+                                    else
+                                    {
+                                        // let the gc handle it, it can be attached to canvas.
+                                        //pooledMat.Dispose();
+                                        pooledMat = mat.Clone();
+                                    }
+                                }
+                                catch { pooledMat = mat.Clone(); }
+                                
+
+                                mainMat = pooledMat;
+                            }
+                            else
+                            {
+                                mainMat = mat.Clone();
+                            }
+                            keyReq = 0;
+                        }
+
+
+                        if (statusCode != 0)
+                        {
+                            if (--keyReq < 0)
+                            {
+                                Console.WriteLine("KeyFrameRequested");
+                                jitterBufffer.Discard();
+                                KeyFrameRequested?.Invoke();
+                                keyReq = 4;
+                            }
+
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        decoder.Dispose();
+                        decoder = null;
+                        Console.WriteLine("DecoderBroken: " + e.Message);
+                        return;
+                    }
+                    if (mainMat != null)
+                    {
+                        DecodedFrameAvailable?.Invoke(mainMat);
+                    }
+                    else
+                    {
+                       // Console.WriteLine("Bmp null");
+                    }
+                }
+            }
+        }
+        private unsafe void Decode2(byte[] payload, int payloadOffset, int payloadCount)
+        {
+            lock (changeLock)
+            {
+                fixed (byte* b = &payload[payloadOffset])
+                {
+                    if (decoder == null)
+                        decoder = H264TranscoderProvider.SetupDecoder();
+
+                    Mat mainMat = null;
+                    try
+                    {
+                        if (decoder.Decode(b, payloadCount, noDelay: DecodeNoDelay, out DecodingState statusCode, out RgbImage rgbImg))
+                        {
+                            var ptr = new IntPtr(rgbImg.ImageBytes);
+                            var mat = new Mat(rgbImg.Height, rgbImg.Width, MatType.CV_8UC3, ptr);
+
+                            mainMat = mat;
+                            keyReq = 0;
+                        }
+
+                        if (statusCode != DecodingState.dsErrorFree)
+                        {
+                            
+                            if (--keyReq < 0)
+                            {
+                                Console.WriteLine("KeyFrameRequested");
+                                jitterBufffer.Discard();
+                                KeyFrameRequested?.Invoke();
+                                keyReq = 10;
+                            }
+
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        decoder.Dispose();
+                        decoder = null;
+                        Console.WriteLine("DecoderBroken: " + e.Message);
+                        return;
+                    }
+                    if (mainMat != null)
+                    {
+                        DecodedFrameAvailable?.Invoke(mainMat);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Bmp null");
+                    }
+                }
+            }
+        }
+        
+        internal void ApplyChanges(int fps, int targetBitrate, int frameWidth, int frameHeight, ConfigType configType = ConfigType.CameraBasic)
+        {
+            lock (changeLock)
+            {
+                encoderWidth = (ushort)frameWidth;
+                encoderHeight = (ushort)frameHeight;
+
+                encoder.Dispose();
+                unsafe
+                {
+                    encoder = H264TranscoderProvider.SetupEncoderUnsafe(frameWidth, frameHeight, fps: fps, bps: targetBitrate, configType);
+                }
+            }
+            
+
         }
     }
 }

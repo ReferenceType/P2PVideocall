@@ -1,5 +1,4 @@
-﻿using OpenCvSharp.UserInterface;
-using ProtoBuf;
+﻿using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

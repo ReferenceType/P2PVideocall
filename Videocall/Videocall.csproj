@@ -8,7 +8,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>Videocall</RootNamespace>
     <AssemblyName>Videocall</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WarningLevel>4</WarningLevel>
@@ -45,9 +45,10 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
@@ -55,6 +56,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
     <DebugSymbols>true</DebugSymbols>
@@ -94,14 +96,15 @@
     <SignManifests>true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="NetworkLibrary, Version=1.0.4.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="H264Sharp32, Version=0.0.0.0, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\source\repos\OpenH264Wrapper2\Release\H264Sharp32.dll</HintPath>
+    </Reference>
+    <Reference Include="NetworkLibrary, Version=2.0.1.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\NetworkExperiments\Protobuff\bin\Release\netstandard2.0\NetworkLibrary.dll</HintPath>
     </Reference>
-    <Reference Include="OpenH264Lib">
-      <HintPath>..\..\OpenH264Lib.NET-master\Release\OpenH264Lib.dll</HintPath>
-    </Reference>
-    <Reference Include="Protobuff, Version=1.0.1.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="Protobuff, Version=2.1.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\NetworkExperiments\Protobuff\bin\Release\netstandard2.0\Protobuff.dll</HintPath>
     </Reference>
@@ -132,9 +135,13 @@
     <Compile Include="Models\MainWindow\ChatSerializer.cs" />
     <Compile Include="Models\MainWindowEventAggregator.cs" />
     <Compile Include="Services\Audio\JitterBuffer.cs" />
+    <Compile Include="Services\ScreenShare\DXScreenCapture.cs" />
     <Compile Include="Services\ScreenShare\ScreenHelper.cs" />
+    <Compile Include="Services\ScreenShare\ScreenShareHandlerH264.cs" />
     <Compile Include="Services\ScreenShare\SimpleScreenShareHandler.cs" />
     <Compile Include="Services\Video\H264\H264Transcoder.cs" />
+    <Compile Include="Services\Video\H264\H264TranscoderProvider.cs" />
+    <Compile Include="Services\Video\H264\JitterBufffer.cs" />
     <Compile Include="Services\Video\H264\VideoHandler2.cs" />
     <Compile Include="Windows\AlertWindow.xaml.cs">
       <DependentUpon>AlertWindow.xaml</DependentUpon>
@@ -142,10 +149,9 @@
     <Compile Include="Windows\DebugLogWindow.xaml.cs">
       <DependentUpon>DebugLogWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Services\CallStateManager.cs" />
+    <Compile Include="CallStateManager.cs" />
     <Compile Include="Models\MainWindow\MainWindowModel.cs" />
     <Compile Include="Models\MainWindow\MainWindowViewModel.cs" />
-    <Compile Include="Services\HttpProxy\IpRetriever.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </Compile>
@@ -227,11 +233,29 @@
     <PackageReference Include="NAudio.Extras">
       <Version>2.1.0</Version>
     </PackageReference>
-    <PackageReference Include="OpenCvSharp3-AnyCPU">
-      <Version>4.0.0.20181129</Version>
+    <PackageReference Include="OpenCvSharp4">
+      <Version>4.8.0.20230708</Version>
+    </PackageReference>
+    <PackageReference Include="OpenCvSharp4.Extensions">
+      <Version>4.8.0.20230708</Version>
+    </PackageReference>
+    <PackageReference Include="OpenCvSharp4.runtime.win">
+      <Version>4.8.0.20230708</Version>
+    </PackageReference>
+    <PackageReference Include="OpenCvSharp4.Windows">
+      <Version>4.8.0.20230708</Version>
     </PackageReference>
     <PackageReference Include="protobuf-net">
       <Version>3.1.4</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Direct2D1">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Direct3D11">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.DXGI">
+      <Version>4.2.0</Version>
     </PackageReference>
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe">
       <Version>6.0.0</Version>
@@ -276,7 +300,16 @@
     <Resource Include="Resources\micon.png" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="openh264-2.1.1-win32.dll">
+    <Content Include="Converter32.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Converter64.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="openh264-2.3.1-win32.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="openh264-2.3.1-win64.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

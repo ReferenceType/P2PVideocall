@@ -59,7 +59,6 @@ public class MainWindowViewModel : PropertyNotifyBase
     public bool CameraChecked { get => cameraChecked; 
         set { cameraChecked = value; HandleCamChecked(value); OnPropertyChanged(); } }
 
-  
     public bool MicroponeChecked { get => microponeChecked; 
         set { microponeChecked = value; HandleMicChecked(value); OnPropertyChanged(); } }
 
@@ -91,9 +90,10 @@ public class MainWindowViewModel : PropertyNotifyBase
     private MainWindowModel model;
 
     private ChatSerializer chatSerializer;
-    internal MainWindowViewModel(ServiceHub services)
+    internal MainWindowViewModel()
     {
-        this.services = services;
+        services = ServiceHub.Instance;
+
         CallSelectedCommand = new RelayCommand(HandleCallSelected);
         EndCallCommand = new RelayCommand(HandleEndCallClicked);
         SendTextCommand = new RelayCommand(HandleChatSend);
@@ -148,14 +148,7 @@ public class MainWindowViewModel : PropertyNotifyBase
     }
     private void HandleShareScreenChecked(bool value)
     {
-        if(value)
-            services.VideoHandler.Pause();
-        else services.VideoHandler.Resume();
-
         model.HandleShareScreenChecked(value);
-
-        //if (value)
-        //    CameraChecked = false;
     }
 
     private void HandleMicChecked(bool value)
@@ -166,6 +159,7 @@ public class MainWindowViewModel : PropertyNotifyBase
 
     private void HandleChatSend(object obj)
     {
+
         DispatcherRun(() =>
         {
 

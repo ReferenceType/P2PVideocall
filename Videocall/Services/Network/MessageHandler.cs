@@ -1,4 +1,5 @@
 ﻿using NetworkLibrary;
+using NetworkLibrary.Components;
 using NetworkLibrary.P2P.Generic;
 using ProtoBuf.Meta;
 using Protobuff;
@@ -19,15 +20,15 @@ namespace Videocall
     public class MessageHeaders
     {
         public const string Identify = "Who";
-        public const string AudioSample = "AudioSample";
-        public const string ImageMessage = "ImageMessage";
+        public const string AudioSample = "AS";
+        public const string ImageMessage = "IMG";
         public const string Text = "Text";
         public const string FileDirectoryStructure = "FileDirectoryStructure";
         public const string FileTransfer = "FileTransfer";
         public const string Call = "Call";
         public const string EndCall = "EndCall";
         public const string RemoteClosedCam = "RemoteClosedCam";
-        public const string VideoAck = "VideoAck";
+        public const string VideoAck = "Vack";
         public const string MicClosed = "MicClosed";
     }
     internal class MessageHandler
@@ -63,7 +64,9 @@ namespace Videocall
         {
             string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             var cert = new X509Certificate2(path + "/client.pfx", "greenpass");
-            client = new RelayClient(cert);
+            client = new RelayClient(cert, 3478);
+           // client.MaxUdpPackageSize = 32000;
+            //client.EnableJumboUdpRateControl = true;
 
             client.OnMessageReceived += TcpMessageReceived;
             client.OnUdpMessageReceived += UdpMessageReceived;
@@ -138,6 +141,8 @@ namespace Videocall
 
         internal void SendStreamMessage(Guid id, MessageEnvelope message, bool reliable) 
         {
+            if (id == Guid.Empty)
+                return;
             if (TransportLayer == "Udp")
             {
                 if(reliable)
@@ -149,9 +154,27 @@ namespace Videocall
             else
                 client.SendAsyncMessage(id, message);
         }
+        internal void SendStreamMessage(Guid id, MessageEnvelope message, bool reliable, Action<PooledMemoryStream> OnBeforeSerialize)
+        {
+            if (id == Guid.Empty)
+                return;
+            if (TransportLayer == "Udp")
+            {
+                if (reliable)
+                    //client.SendRudpMessage(id, message, OnBeforeSerialize);
+                    client.SendAsyncMessage(id, message, OnBeforeSerialize);
+
+                else
+                    client.SendUdpMesssage(id, message,OnBeforeSerialize);
+            }
+            else
+                client.SendAsyncMessage(id, message, OnBeforeSerialize);
+        }
 
         public void SendAsyncMessage(Guid peerId,MessageEnvelope envelope)
         {
+            if (peerId == Guid.Empty)
+                return;
             if (TransportLayer == "Udp")
                 client.SendRudpMessage(peerId, envelope, RudpChannel.Realtime);
 
@@ -162,7 +185,8 @@ namespace Videocall
 
         public void SendAsyncMessage<T>(Guid peerId, MessageEnvelope envelope, T m) where T : IProtoMessage
         {
-
+            if (peerId == Guid.Empty)
+                return;
             if (TransportLayer == "Udp")
                 client.SendRudpMessage(peerId, envelope, m, RudpChannel.Realtime);
 
@@ -181,6 +205,7 @@ namespace Videocall
 
         public Task<MessageEnvelope> SendRequesAndWaitResponseFT(Guid peerId, MessageEnvelope envelope, int timeout = 10000, RudpChannel channel = RudpChannel.Ch1)
         {
+
             if (FTTransportLayer == "Udp")
                 return client.SendRudpMessageAndWaitResponse(peerId, envelope, timeout, channel);
 
@@ -197,9 +222,9 @@ namespace Videocall
                 return client.SendRequestAndWaitResponse(peerId, envelope,m, timeout);
         }
 
-        public void SendRudpMessage(Guid peerId, MessageEnvelope message)
+        public void SendRudpMessage(Guid peerId, MessageEnvelope message, RudpChannel channel = RudpChannel.Ch1)
         {
-            client.SendRudpMessage(peerId,message);
+            client.SendRudpMessage(peerId, message,channel);
         }
 
         public void SendRudpMessage<T>(Guid peerId, MessageEnvelope message,T m)

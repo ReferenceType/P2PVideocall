@@ -18,8 +18,18 @@ namespace Videocall
         private string chunkSize = "1000000";
         private bool autoReconnect = true;
         private bool autoHolepunch = true;
+        private int targetBps = 1500;
+        private int sctargetBps = 3000;
         private static bool dontInvoke = true;
-        
+        private int screenId =0;
+        private int gpuId = 0;
+        private int idrInterval = -1;
+        private int sCTargetFps = 15;
+        private bool multiThreadedScreenShare = false;
+        private int cameraIndex = 0;
+        private int camFrameWidth = 640;
+        private int camFrameHeight = 480;
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         public static PersistentSettingConfig Instance
@@ -42,7 +52,37 @@ namespace Videocall
         public string ChunkSize { get => chunkSize; set { chunkSize = value; OnPropertyChanged(); } }
         public bool AutoReconnect { get => autoReconnect; set { autoReconnect = value; OnPropertyChanged(); } }
         public bool AutoHolepunch { get => autoHolepunch; set { autoHolepunch = value; OnPropertyChanged(); } }
+        public int CameraIndex { get => cameraIndex; set {
+                cameraIndex = value;
+                OnPropertyChanged();
+            } }
+        public int CamFrameWidth { get => camFrameWidth; set { camFrameWidth = value; OnPropertyChanged(); } }
+        public int CamFrameHeight { get => camFrameHeight; set { camFrameHeight = value; OnPropertyChanged(); } }
+        public int ScreenId { get => screenId; set { screenId = value; OnPropertyChanged(); } }
+        public int GpuId { get => gpuId; set { gpuId = value; OnPropertyChanged(); } }
+        public int TargetBps { get => targetBps; set { targetBps = value; OnPropertyChanged(); } }
+        public int IdrInterval { get => idrInterval; set {idrInterval = value; OnPropertyChanged();  } }
+        public int SCTargetBps { get => sctargetBps; set { sctargetBps = value; OnPropertyChanged(); } }
+        public int SCTargetFps { get => sCTargetFps; set { sCTargetFps = value; OnPropertyChanged(); } }
+        public bool MultiThreadedScreenShare { get => multiThreadedScreenShare; set {
+                multiThreadedScreenShare = value;
+                OnPropertyChanged();
+            } }
 
+        public bool EnableCongestionAvoidance { get => enableCongestionAvoidance; 
+            set { enableCongestionAvoidance = value; 
+                OnPropertyChanged(); 
+            } }
+
+        public bool ReliableIDR { get => reliableIDR;  set
+            {
+                reliableIDR = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private bool reliableIDR = true;
+        private bool enableCongestionAvoidance = true;
         public static void SerializeToJsonAndSave()
         {
             string jsonString = JsonSerializer.Serialize(Instance);
