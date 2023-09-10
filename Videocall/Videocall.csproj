@@ -96,9 +96,8 @@
     <SignManifests>true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="H264Sharp32, Version=0.0.0.0, Culture=neutral, processorArchitecture=x86">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\source\repos\OpenH264Wrapper2\Release\H264Sharp32.dll</HintPath>
+    <Reference Include="H264Sharp64">
+      <HintPath>..\..\..\source\repos\OpenH264Wrapper2\x64\Release\H264Sharp64.dll</HintPath>
     </Reference>
     <Reference Include="NetworkLibrary, Version=2.0.1.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

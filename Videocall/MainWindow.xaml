@@ -15,7 +15,7 @@
         Activated="Window_Activated"
         Title="VideoCall" 
         Icon="Resources/favicon2.ico"
-        Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="800" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}" MinWidth="1200"
+        Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="670" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}" MinWidth="810"
         xmlns:uc="clr-namespace:Videocall.UserControls"
         BorderThickness="1,1,1,1" BorderBrush="#505050">
 
@@ -539,7 +539,7 @@
                                         
                                         <StackPanel Margin="0,17,0,0">
                                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                                <CheckBox Foreground="WhiteSmoke" Content="Enable Visual" HorizontalAlignment="Left" Margin="5,0,0,1" VerticalAlignment="Bottom" 
+                                                <CheckBox Foreground="WhiteSmoke" Content="Enable Graph" HorizontalAlignment="Left" Margin="5,0,0,1" VerticalAlignment="Bottom" 
                                                 IsChecked="{Binding SettingsViewModel.EnableSoundVisualPublish}"/>
                                                 <StackPanel Margin="30,0,0,0">
                                                     <RadioButton Content="Signal" Foreground="WhiteSmoke" IsChecked="True"/>
