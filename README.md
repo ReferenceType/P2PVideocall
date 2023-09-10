@@ -1,32 +1,40 @@
 # P2PVideocall
-Voice-Video Call Wpf Application based on P2PNetwork with protobuf messages.
+Voice-Video Call Wpf Application based on P2PNetwork.
 <br/>Tested and achieved stable calls between 1.204,5 km distance clients
 <br/>
-<br/>Release available https://github.com/ReferenceType/P2PVideocall/releases/tag/v0.2.0-alpha
+<br/>Release available https://github.com/ReferenceType/P2PVideocall/releases/tag/v0.9.0
 ## Features
-- Videocall among connected peers 
+- Videocall among connected peers
+- H264 Encoding
 - Persisitent Chat, where chat history loaded on demand as you scroll up
-- Secure File-Folder tree Transfer
-- Screen Share
+- Secure File-Folder tree Transfer(TCP  and UDP)
+- Screen Share based on DirectX 11.
 ## Technical features
 - Secure Udp Hole punching
 - End to End encyrption on Tcp And Udp
+- Reliable Udp
+- Congestion Avoidance and Control
 - Toast notifications
 - Dynamic Jitter Buffer for Audio and Video
-- Statistics data for nerds
+- Statistics data and cool settings for nerds
+Application has potent and optimised backend which is a hobby for me, with incomplete front end, which is quite boring to develop. Slowly, i intend to complete it. 
 ## How It works
 <img src="https://user-images.githubusercontent.com/109621184/204115163-3c8da2c3-9030-4325-9f4a-28935ed98977.png" width=50% height=50%>
 
-Each application is a Peer client to a Relay Server. This server is used for randezvous point for Udp Holepunching. 
+Each application is a Peer client to a Relay Server. This server is used as a randezvous point for Udp Holepunching. 
 If holepunch is sucessfull all Udp data is send directly among peers.
 All TCP data goes through the relay server there is no hole punching for that yet. 
+Furthermore, all reliable communication is also goes through Reliable Udp channel
 Relay server can be found on repository: https://github.com/ReferenceType/RelayServer
 
 The back-end network core libraries are located on : https://github.com/ReferenceType/StandardNetworkLibrary
 ## How to setup
 Launch the Relay Server console application. Launch the Videocall Application and write your Relay Servers Ip and Port and hit comnnect.
-If any other application connects to same relay server it will apper on your list on main window. You can select and call that peer or transfer files or simple write chat.
-Chat is quite primitive and work in progress
+If any other application connects to same relay server it will apper on your list on main window. You can select and call that peer or transfer files or chat.
+
+If you intend to use this application over Internet, You need to enable port forwarding on your router for your relay server. 
+If you dont wanna bother with your ISPs dynamic IPs, you can use a DDNS service like NoIP.
+or you can deploy relay server on a cloud etc.
 
 ## Images
 ### Call interface
