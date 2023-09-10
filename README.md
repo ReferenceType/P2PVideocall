@@ -6,24 +6,24 @@ Voice-Video Call Wpf Application based on P2PNetwork.
 ## Features
 - Videocall among connected peers
 - H264 Encoding
-- Persisitent Chat, where chat history loaded on demand as you scroll up
-- Secure File-Folder tree Transfer(TCP  and UDP)
-- Screen Share based on DirectX 11.
+- Persisitent Chat
+- Secure File-Folder tree Transfer with MD5 hash file integrity verification(TCP and UDP)
+- High Performance Screen Share based on DirectX 11 (60+ fps @1080p single core).
 ## Technical features
 - Secure Udp Hole punching
 - End to End encyrption on Tcp And Udp
-- Reliable Udp
+- Reliable Udp channels and Jumbo Udp Message support
 - Congestion Avoidance and Control
-- Toast notifications
 - Dynamic Jitter Buffer for Audio and Video
+- Toast notifications
 - Statistics data and cool settings for nerds
 
-Application has potent and optimised backend which is a hobby for me, with incomplete front end, which is quite boring to develop. Slowly, i intend to complete it. 
+Application has powerfull and optimised backend which is a hobby for me. However, Front end is incomplete,and its quite boring to develop. Slowly, i intend to complete it. 
 ## How It works
 <img src="https://user-images.githubusercontent.com/109621184/204115163-3c8da2c3-9030-4325-9f4a-28935ed98977.png" width=50% height=50%>
 
 Each application is a Peer client to a Relay Server. This server is used as a randezvous point for Udp Holepunching. 
-If holepunch is sucessfull all Udp data is send directly among peers.
+If holepunch is sucessfull, all Udp traffic is send directly among peers.
 All TCP data goes through the relay server there is no hole punching for that yet. 
 Furthermore, all reliable communication is also goes through Reliable Udp channel
 Relay server can be found on repository: https://github.com/ReferenceType/RelayServer
