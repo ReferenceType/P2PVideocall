@@ -132,7 +132,7 @@ namespace Videocall
 
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            string ex = "Current_DispatcherUnhandledException ["+ DateTime.Now.ToString()+"]\n";
+            string ex = "\n---------\nCurrent_DispatcherUnhandledException ["+ DateTime.Now.ToString()+"]\n";
              ex += e.Exception.Message + e.Exception.StackTrace;
             string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             File.AppendAllText(workingDir + "/CrashDump.txt", ex);
@@ -141,7 +141,7 @@ namespace Videocall
 
         private void CurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            string ex = "CurrentDomainUnhandledException [" + DateTime.Now.ToString() + "]\n";
+            string ex = "\n--------\nCurrentDomainUnhandledException [" + DateTime.Now.ToString() + "]\n";
              ex+= ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
             string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             File.AppendAllText(workingDir + "/CrashDump.txt", ex);

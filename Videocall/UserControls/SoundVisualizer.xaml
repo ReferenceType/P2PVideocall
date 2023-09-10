@@ -1,0 +1,261 @@
+﻿<UserControl x:Class="Videocall.UserControls.SoundVisualizer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Videocall.UserControls"
+             mc:Ignorable="d" 
+             d:DesignHeight="100" d:DesignWidth="200">
+    <Grid>
+        <!--The reason I dont use this and map them 1 by 1 like a donkey, is the performance. Itemsource is 5x slower.-->
+        <!--<StackPanel Orientation="Horizontal" Margin="70,0,0,0" VirtualizingStackPanel.VirtualizationMode="Recycling">
+            <ItemsControl x:Name="tStack" ItemsSource="{Binding Data.SoundValues}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ProgressBar HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Val}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                            <ProgressBar.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform/>
+                                    <SkewTransform/>
+                                    <RotateTransform Angle="-90"/>
+                                    <TranslateTransform/>
+                                </TransformGroup>
+                            </ProgressBar.RenderTransform>
+                        </ProgressBar>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>-->
+
+
+        <StackPanel Orientation="Horizontal">
+            <ProgressBar x:Name="D1" HorizontalAlignment="Left" Height="10" Margin="0,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V1, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D2" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding  Data.V2, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D3" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding  Data.V3, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D4" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V4, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D5" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V5, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D6" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V6, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D7" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V7, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D8" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V8, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D9" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V9, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D10" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V10, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar x:Name="D11" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V11, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D12" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V12, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D13" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V13, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D14"  HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V14, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D15"  HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V15, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D16" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V16, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D17" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V17, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D18" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V18, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D19" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V19, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+            <ProgressBar  x:Name="D20" HorizontalAlignment="Left" Height="10" Margin="-70,0,0,0" VerticalAlignment="Bottom" Width="80" Background="Black"
+                                                    Value="{Binding Data.V20, Mode=OneWay}" Foreground="#FF6DB006" RenderTransformOrigin="0,0" BorderThickness="0" BorderBrush="Transparent">
+                <ProgressBar.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-90"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </ProgressBar.RenderTransform>
+            </ProgressBar>
+        </StackPanel>
+        
+    </Grid>
+</UserControl>

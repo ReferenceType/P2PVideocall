@@ -8,6 +8,7 @@ using System.Windows.Input;
 using Videocall.Models;
 using Videocall.Services.ScreenShare;
 using Videocall.Services.Video.H264;
+using Videocall.UserControls;
 using Windows.Media.Capture;
 
 namespace Videocall.Settings
@@ -56,6 +57,7 @@ namespace Videocall.Settings
 
         private int bufferedDurationPercentage;
         private int congestion = 0;
+        private SoundSliceData soudVisualData;
 
         #region Properties
 
@@ -134,17 +136,6 @@ namespace Videocall.Settings
                 OnPropertyChanged();
             }
         }
-        private double alvl;
-        public double ALvl
-        {
-            get => alvl;
-            set
-            {
-                alvl = value;
-                OnPropertyChanged();
-            }
-        }
-
 
         public bool ListenYourselfCheck
         {
@@ -199,7 +190,6 @@ namespace Videocall.Settings
         public string IncomingFrameRate { get => incomingFrameRate; set { incomingFrameRate = value; OnPropertyChanged(); } }
 
         public string AverageLatency { get => averageLatency; private set { averageLatency = value; OnPropertyChanged(); } }
-
         public ComboBoxItem SCResolution { get; set; } = new ComboBoxItem();
         public ComboBoxItem H264Config { get; set; } = new ComboBoxItem();
 
@@ -240,9 +230,34 @@ namespace Videocall.Settings
                 OnPropertyChanged();
             }
         }
+        public bool RectifiedSignalChecked { get => rectifiedSignalChecked; set 
+            { 
+                rectifiedSignalChecked = value;
+                OnPropertyChanged();
+                services.AudioHandler.RectifySignal = value;
 
+            }
+        }
+
+        public bool EnableSoundVisualPublish
+        {
+            get => enableSoundVisualPublish; set
+            {
+                enableSoundVisualPublish = value;
+                OnPropertyChanged();
+                services.AudioHandler.EnableSoundVisualData = value;
+
+            }
+        }
         public int Congestion { get => congestion; set { congestion = value; OnPropertyChanged(); } }
 
+        public SoundSliceData SoudVisualData { get => soudVisualData; set { soudVisualData = value; OnPropertyChanged(); } }
+
+      
+
+        private bool enableSoundVisualPublish;
+
+        private bool rectifiedSignalChecked;
         private SettingsViewModel()
         {
             var services = ServiceHub.Instance;
@@ -259,13 +274,21 @@ namespace Videocall.Settings
             services.LatencyPublisher.Latency += OnLatencyAvailable;
 
             services.AudioHandler.OnStatisticsAvailable += HandleAudioStatistics;
-            services.AudioHandler.OnSoundLevelAvailable = (l) => ALvl = l;
+            services.AudioHandler.OnSoundLevelAvailable = SoundVisualDataAvailable;
 
             services.VideoStatisticsAvailable = HandleVideoStatistics;
             HandleConnectRequest(null);
             MainWindowEventAggregator.Instance.PeerRegistered += OnPeerRegistered;
 
             ApplyCamSettings(null);
+        }
+
+        private void SoundVisualDataAvailable(SoundSliceData data)
+        {
+            DispatcherRun(() =>
+            {
+                SoudVisualData = data;
+            });
         }
 
         private void HandleVideoStatistics(VCStatistics statistics)

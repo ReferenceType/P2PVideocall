@@ -16,6 +16,7 @@
         Title="VideoCall" 
         Icon="Resources/favicon2.ico"
         Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="800" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}" MinWidth="1200"
+        xmlns:uc="clr-namespace:Videocall.UserControls"
         BorderThickness="1,1,1,1" BorderBrush="#505050">
 
     <Window.Resources>
@@ -370,13 +371,13 @@
                                        
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
                                                     ToolTip="Represents in how many frames, an IDR(Instantaneous Decoder Refresh) Frame will be forced on encoder.&#x0a; Provides better stability on lossy connections, but increases the bandwith&#x0a;use -1 for automatic" >
-                                            <Label Content="IDR Interval: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="106"/>
-                                            <TextBox Text="{Binding SettingsViewModel.Config.IdrInterval}" Margin="10,4,10,0" Width="40," Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <Label Content="IDR Interval: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="106"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.IdrInterval}" Margin="10,4,10,0" Width="60," Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
                                                     ToolTip="Target bitrate of the encoder. Encoder tries to stay under this limit by rate control">
-                                            <Label Content="Camera Target Kbps: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="130"/>
-                                            <TextBox Text="{Binding SettingsViewModel.Config.TargetBps}" Margin="-14,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <Label Content="Target Kbps: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="130"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.TargetBps}" Margin="-14,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
                                                     ToolTip="Default is recomended. Advanced disables frame skipping for rate control">
@@ -445,23 +446,23 @@
                                              Text="Screen Capture Settings" VerticalAlignment="Top" FontWeight="Bold"/>
 
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                            <Label Content="Target Kbps: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="140"/>
-                                            <TextBox Text="{Binding SettingsViewModel.Config.SCTargetBps}" Margin="-24,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <Label Content="Target Kbps: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="140"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.SCTargetBps}" Margin="-24,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                            <Label Content="Target Fps: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="140"/>
-                                            <TextBox Text="{Binding SettingsViewModel.Config.SCTargetFps}" Margin="-24,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <Label Content="Target Fps: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="140"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.SCTargetFps}" Margin="-24,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                            <Label Content="Screen Id: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="106"
+                                            <Label Content="Screen Id: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="106"
                                                    ToolTip="Determines which screen to capture on multi-monitor systems"/>
-                                            <TextBox Text="{Binding SettingsViewModel.Config.ScreenId}" Margin="10,4,10,0" Width="40" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.ScreenId}" Margin="10,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                        
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
                                                     ToolTip="Keep it 0 unless you have multi-gpu system">
-                                            <Label Content="GPU Id: " Margin="0,0,36,0" HorizontalAlignment="Left" Width="106"/>
-                                            <TextBox Text="{Binding SettingsViewModel.Config.GpuId}" Margin="10,4,10,0" Width="40," Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <Label Content="GPU Id: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="106"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.GpuId}" Margin="10,4,10,0" Width="60," Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         
                                         
@@ -525,7 +526,7 @@
                                                 ToolTip="Jitter buffer duration represents maximum allowed time to wait for a missing audio sample in miliseconds"/>
 
                                         <!--<TextBlock HorizontalAlignment="Center" Margin="0,10,0,0" TextWrapping="Wrap" Text="Audio Statistics"  FontWeight="Bold" VerticalAlignment="Top"/>-->
-                                        <StackPanel Orientation="Horizontal" Margin="0,32,0,0">
+                                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
                                             <TextBlock HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap" Text="Buffer Level" VerticalAlignment="Top"/>
                                             <ProgressBar HorizontalAlignment="Left" Height="10" Margin="20,4,0,0" VerticalAlignment="Top" Width="100" Background="Black"
                                                     Value="{Binding SettingsViewModel.BufferedDurationPercentage}"
@@ -535,12 +536,31 @@
                                        
                                         <TextBlock HorizontalAlignment="Left" Margin="5,5,0,0" TextWrapping="Wrap" 
                                                 Text="{Binding SettingsViewModel.TotalNumLostPackages}" VerticalAlignment="Top"/>
+                                        
+                                        <StackPanel Margin="0,17,0,0">
+                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                <CheckBox Foreground="WhiteSmoke" Content="Enable Visual" HorizontalAlignment="Left" Margin="5,0,0,1" VerticalAlignment="Bottom" 
+                                                IsChecked="{Binding SettingsViewModel.EnableSoundVisualPublish}"/>
+                                                <StackPanel Margin="30,0,0,0">
+                                                    <RadioButton Content="Signal" Foreground="WhiteSmoke" IsChecked="True"/>
+                                                    <RadioButton Content="Rectified" Foreground="WhiteSmoke" IsChecked="{Binding SettingsViewModel.RectifiedSignalChecked}"/>
+                                                </StackPanel>
+                                                
+                                            </StackPanel>
 
-                                        <!--<ProgressBar HorizontalAlignment="Left" Height="10" Margin="5,4,0,0" VerticalAlignment="Top" Width="190" Background="Black"
-                                                    Value="{Binding SettingsViewModel.ALvl}" Foreground="#FF6DB006"/>-->
-
-
+                                            <uc:SoundVisualizer Data="{Binding SettingsViewModel.SoudVisualData, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,85,-200,0"/>
+                                            
+                                        </StackPanel>
+                                        
                                     </StackPanel>
+                                    <Rectangle HorizontalAlignment="Left" Height="125"  Stroke="DimGray" VerticalAlignment="Bottom" Width="200" RadiusX="4.167" RadiusY="4.167"/>
+
+
+
+                                    <!--<StackPanel Orientation="Horizontal">
+                                        <uc:SoundVisualizer Data="{Binding SettingsViewModel.SoudVisualData, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,0,0"/>
+                                    </StackPanel>-->
+                                  
                                     <Rectangle HorizontalAlignment="Left" Height="350"  Stroke="DimGray" VerticalAlignment="Center" Width="200" RadiusX="4.167" RadiusY="4.167"/>
 
                                 </Grid>

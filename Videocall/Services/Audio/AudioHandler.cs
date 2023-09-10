@@ -1,5 +1,6 @@
 ﻿using NAudio.Codecs;
 using NAudio.Extras;
+using NAudio.Gui;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using NetworkLibrary;
@@ -15,6 +16,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using System.Windows;
+using Videocall.UserControls;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Rebar;
 
 namespace Videocall
@@ -37,13 +39,12 @@ namespace Videocall
         public int BufferedDuration;
         public int NumLostPackages;
         public int TotalNumDroppedPackages;
-        public double Lvl;
     }
     internal class AudioHandler
     {
         public Action<AudioSample> OnAudioAvailable;
         public Action<AudioStatistics> OnStatisticsAvailable;
-        public Action<double> OnSoundLevelAvailable;
+        public Action<SoundSliceData> OnSoundLevelAvailable;
 
         public bool LoopbackAudio
         {
@@ -76,6 +77,9 @@ namespace Videocall
         public float Gain { get => gain; set { volumeSampleProvider.Volume = value; gain = value; } }
         public TimeSpan BufferedDuration => soundListenBuffer.BufferedDuration;
 
+        public bool RectifySignal { get; internal set; }
+        public bool EnableSoundVisualData { get; internal set; }
+
         public int BufferedDurationAvg = 200;
         public bool SendMultiStream = false;
 
@@ -99,7 +103,6 @@ namespace Videocall
         private float gain=1;
        
        
-        private double aLvl;
         public AudioHandler()
         {
             bitrate = 64000;
@@ -207,53 +210,78 @@ namespace Videocall
             var buffer = DecodeStream.GetBuffer();
             int pos = DecodeStream.Position32;
             int offset_ = 0;
-
-           
-            CalculateAudioLevel(buffer, offset_, pos);
+          
             soundListenBuffer?.AddSamples(buffer,offset_,pos);
+            if (EnableSoundVisualData)
+                CalculateAudioVisualData(buffer, offset_, pos);
             streamPool.ReturnStream(DecodeStream);
 
             var current = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds+jitterBuffer.Duration;
             BufferedDurationAvg = (50 * BufferedDurationAvg + current) / 51;
         }
-        double max = 0;
-        int cnt = 0;
-        private void CalculateAudioLevel(byte[] buffer, int offset_, int pos)
+        float[] sums = new float[20];
+
+        private void CalculateAudioVisualData(byte[] buffer, int offset_, int count)
         {
-            return;
-            if (cnt++ == 5)
+
+            for (int i = 0; i < 20; i++)
             {
-                cnt = 0;
+                int c = count / 20;
+                var sum = RectifySignal ? CalculateSliceSumRectified(buffer, offset_, c) : CalculateSliceSum(buffer, offset_, c);
+                sums[i] = (3*sums[i]+sum )/4;
+                offset_ += c;
             }
-            else return;
-           if(max == 0)
-            {
-                for (int i = 0; i < pos/2; i++)
-                {
-                    max += short.MaxValue;
-                }
-                max = max / 4;
-            }
-            aLvl = 0;
+            SoundSliceData data = new SoundSliceData(sums);
+            OnSoundLevelAvailable?.Invoke(data);
+        }
+       
+        private float CalculateSliceSum(byte[] buffer, int offset, int count)
+        {
+            const int max = 196602/3;
+            //if (max == 0)
+            //{
+            //    for (int i = 0; i < count / 2; i++)
+            //    {
+            //        max += short.MaxValue;
+            //    }
+            //    max = max / 4;
+            //}
+            float aLvl = 0;
             unsafe
             {
-                fixed(byte* p = &buffer[offset_])
+                fixed (byte* p = &buffer[offset])
                 {
-                    for (int i = 0; i < pos; i += 2)
+                    for (int i = 0; i < count; i += 2)
+                    {
+                        var sp = (short*)p;
+                        short val = *sp;
+                        aLvl += val;//(val + (val >> 31)) ^ (val >> 31);
+                        sp++;
+                    }
+                }
+            }
+            return ((aLvl / max) * 50)+50;
+        }
+        private float CalculateSliceSumRectified(byte[] buffer, int offset, int count)
+        {
+            const int max = 196602 / 3;
+           
+            float aLvl = 0;
+            unsafe
+            {
+                fixed (byte* p = &buffer[offset])
+                {
+                    for (int i = 0; i < count; i += 2)
                     {
                         var sp = (short*)p;
                         short val = *sp;
                         aLvl += (val + (val >> 31)) ^ (val >> 31);
-                        sp ++;
+                        sp++;
                     }
                 }
             }
-          //  Console.WriteLine(aLvl);
-            aLvl = ((aLvl / max) * 100);
-            OnSoundLevelAvailable?.Invoke(aLvl);
-
+            return ((aLvl / max) * 100);
         }
-
         public void StartSpeakers()
         {
             if (player.PlaybackState == PlaybackState.Playing)
@@ -363,7 +391,6 @@ namespace Videocall
                 BufferSize = (int)soundListenBuffer.BufferDuration.TotalMilliseconds,
                 TotalNumDroppedPackages = jitterBuffer.NumLostPackages,
                 NumLostPackages = (jitterBuffer.NumLostPackages - lastLostPackckageAmount) / 10,
-                Lvl = aLvl
             };
             lastLostPackckageAmount = jitterBuffer.NumLostPackages;
             return data;

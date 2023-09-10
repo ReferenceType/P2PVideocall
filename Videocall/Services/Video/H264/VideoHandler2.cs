@@ -340,6 +340,7 @@ namespace Videocall.Services.Video.H264
         {
             bytesReceived += payloadCount;
             consumerSignal.Set();
+            Interlocked.Increment(ref incomingFrameCount);
             transcoder.HandleIncomingFrame(timeStamp ,payload, payloadOffset, payloadCount);
         }
       
@@ -470,11 +471,9 @@ namespace Videocall.Services.Video.H264
             keyFrameRequested = true;
             RedcuceQuality(20);
         }
-      
         public VCStatistics GetStatistics()
         {
             incomingFrameRate = Interlocked.Exchange(ref incomingFrameCount, 0);
-            transcoder?.SetTargetFps(actualFps);
 
             var sendRate = (float)bytesSent / 1000;
             bytesSent = 0;
@@ -482,7 +481,10 @@ namespace Videocall.Services.Video.H264
             bytesReceived = 0;
 
             outgoingFrameRate = capturedFrameCnt;
+            if (outgoingFrameRate != actualFps)
+                transcoder?.SetTargetFps(outgoingFrameRate + 5);
             actualFps = outgoingFrameRate;
+
             capturedFrameCnt = 0;
 
             var st = new VCStatistics

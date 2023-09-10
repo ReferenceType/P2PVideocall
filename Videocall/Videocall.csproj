@@ -143,6 +143,9 @@
     <Compile Include="Services\Video\H264\H264TranscoderProvider.cs" />
     <Compile Include="Services\Video\H264\JitterBufffer.cs" />
     <Compile Include="Services\Video\H264\VideoHandler2.cs" />
+    <Compile Include="UserControls\SoundVisualizer.xaml.cs">
+      <DependentUpon>SoundVisualizer.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Windows\AlertWindow.xaml.cs">
       <DependentUpon>AlertWindow.xaml</DependentUpon>
     </Compile>
@@ -169,6 +172,10 @@
     <Compile Include="Models\MainWindow\PeerInfo.cs" />
     <Compile Include="Models\Settings\SettingsViewModel.cs" />
     <Compile Include="Services\Video\VideoHandler.cs" />
+    <Page Include="UserControls\SoundVisualizer.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Windows\AlertWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
