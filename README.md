@@ -48,8 +48,11 @@ or you can deploy relay server on a cloud etc.
 <img src="https://user-images.githubusercontent.com/109621184/215313213-d79025bc-7b7c-4075-bc07-eee562d99dcf.png" width=50% height=50%>
 
 ### Settings
-- Proviced varoious settings and displays for visualising whats going on. 
-<img src="https://user-images.githubusercontent.com/109621184/215311656-7389395a-33ea-4413-b464-f486f5437594.png" width=50% height=50%>
+- Proviced varoious settings and displays for visualising whats going on.
+<!---img src="https://user-images.githubusercontent.com/109621184/215311656-7389395a-33ea-4413-b464-f486f5437594.png" width=50% height=50%-->
+<img src="https://github.com/ReferenceType/P2PVideocall/assets/109621184/159763c3-a94b-4f46-a67e-6fafa4676cfd" width=50% height=50%>
+<!---               -->
+
 
 ### Background mode mini-window
 - When application is on background a mini camera window will appear. It is resizeable and it automaticaally disappears when main app is active.
