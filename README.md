@@ -17,6 +17,7 @@ Voice-Video Call Wpf Application based on P2PNetwork.
 - Toast notifications
 - Dynamic Jitter Buffer for Audio and Video
 - Statistics data and cool settings for nerds
+
 Application has potent and optimised backend which is a hobby for me, with incomplete front end, which is quite boring to develop. Slowly, i intend to complete it. 
 ## How It works
 <img src="https://user-images.githubusercontent.com/109621184/204115163-3c8da2c3-9030-4325-9f4a-28935ed98977.png" width=50% height=50%>
