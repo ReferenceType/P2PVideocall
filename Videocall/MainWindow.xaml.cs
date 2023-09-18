@@ -83,7 +83,7 @@ namespace Videocall
             Task.Run(async () => { await Task.Delay(50); DispatcherRun(() => SoundButton.IsChecked = true); });
             Task.Run(async() => { await Task.Delay(1000); scrollActive = true; });
 
-            CallStateManager.StaticPropertyChanged += OnCallStateChanged;
+            CallStateManager.Instance.StaticPropertyChanged += OnCallStateChanged;
             ChatHideButton.Visibility = Visibility.Hidden;
             PeersHideButton.Visibility = Visibility.Hidden;
             CamGridColumn.Width = new GridLength(0, GridUnitType.Star);
@@ -132,21 +132,29 @@ namespace Videocall
 
         private void Current_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            string ex = "\n---------\nCurrent_DispatcherUnhandledException ["+ DateTime.Now.ToString()+"]\n";
-             ex += e.Exception.Message + e.Exception.StackTrace;
-            string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            File.AppendAllText(workingDir + "/CrashDump.txt", ex);
+            if (!e.Exception.Message.StartsWith("Cannot set Visibility"))
+            {
+                string ex = "\n---------\nCurrent_DispatcherUnhandledException [" + DateTime.Now.ToString() + "]\n";
+                ex += e.Exception.Message + e.Exception.StackTrace;
+                string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                File.AppendAllText(workingDir + "/CrashDump.txt", ex);
+               
+            }
             Environment.Exit(0);
+
         }
 
         private void CurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            string ex = "\n--------\nCurrentDomainUnhandledException [" + DateTime.Now.ToString() + "]\n";
-             ex+= ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
-            string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            File.AppendAllText(workingDir + "/CrashDump.txt", ex);
+            if (!((Exception)e.ExceptionObject).Message.StartsWith("Cannot set Visibility"))
+            {
+                string ex = "\n--------\nCurrentDomainUnhandledException [" + DateTime.Now.ToString() + "]\n";
+                ex += ((Exception)e.ExceptionObject).Message + ((Exception)e.ExceptionObject).StackTrace;
+                string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                File.AppendAllText(workingDir + "/CrashDump.txt", ex);
+            }
+            
             MessageHandler.Disconnect();
-
             VideoHandler.CloseCamera();
             ScreenShareHandler.StopCapture();
         }
@@ -156,8 +164,13 @@ namespace Videocall
         #region Custom window Code behind
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            cameraWindow.Close();
-            this.Close();
+            MessageHandler.Disconnect();
+            VideoHandler.CloseCamera();
+            ScreenShareHandler.StopCapture();
+            Environment.Exit(0);
+
+            //cameraWindow.Close();
+            //this.Close();
         }
         private void Window_StateChanged(object sender, EventArgs e)
         {
@@ -218,8 +231,10 @@ namespace Videocall
 
         private void ShowDebugWindow(object sender, RoutedEventArgs e)
         {
-            if(!DebugLogWindow.Instance.IsVisible)
+            if (!DebugLogWindow.Instance.IsVisible)
+            {
                 DebugLogWindow.Instance.Show();
+            }
             else
                 DebugLogWindow.Instance.Hide();
 

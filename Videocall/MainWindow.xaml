@@ -97,7 +97,7 @@
                             <Button Content="Call Selected" HorizontalAlignment="Left"  VerticalAlignment="Bottom" Height="32" Width="177" Command="{Binding MainWindowViewModel.CallSelectedCommand }" Margin="10,0,0,37"/>
                             <TextBlock HorizontalAlignment="Left" Margin="10,28,0,0" TextWrapping="Wrap" Text="Online Peers" VerticalAlignment="Top" Width="177"/>
                             <TextBlock HorizontalAlignment="Left" Margin="10,0,0,0" TextWrapping="Wrap" Text="Status:" VerticalAlignment="Top" Width="177"/>
-                            <TextBox Text="{Binding Path=(local:CallStateManager.CurrentState)}" Height="18" Width="111"  BorderThickness="0,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="79,0,0,0" />
+                            <TextBox Text="{Binding MainWindowViewModel.CallStatus}" Height="18" Width="111"  BorderThickness="0,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="79,0,0,0" />
 
                         </Grid>
                     </Grid>
@@ -303,7 +303,8 @@
                                                 IsChecked="{Binding  SettingsViewModel.Config.AutoReconnect}" Height="20"/>
                                             <CheckBox Content="Auto HolePunch" Foreground="WhiteSmoke" Margin="0,20,0,0" 
                                                 IsChecked="{Binding  SettingsViewModel.Config.AutoHolepunch}" Height="20"/>
-
+                                            <CheckBox Content="Auto AcceptCalls" Foreground="WhiteSmoke" Margin="0,20,0,0" 
+                                                IsChecked="{Binding  SettingsViewModel.Config.AutoAcceptCalls}" Height="20"/>
 
                                         </StackPanel>
                                         <StackPanel Margin="50,34,0,0">
@@ -485,9 +486,9 @@
                                             <!--TestSCChecked-->
                                         </StackPanel>
 
-                                        <CheckBox IsChecked="{Binding SettingsViewModel.Config.MultiThreadedScreenShare, Mode=TwoWay}"  Content="Enable MultiThreading" Foreground="WhiteSmoke"
+                                        <CheckBox IsChecked="{Binding SettingsViewModel.Config.MultiThreadedScreenShare, Mode=TwoWay}"  Content="Enable Parallel Pipeline" Foreground="WhiteSmoke"
                                                   Margin="7,10,0,0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                  ToolTip="Enables parallel pipeline for screen capture and encoding. Uses more CPU for better frame rates"/>
+                                                  ToolTip="Enables parallel pipeline for screen capture and encoding. Uses more CPU due to multithreding for better frame rate"/>
                                         <Grid Margin="-5,0,0,0">
                                             <Label Content="Test" HorizontalAlignment="Left" Margin="8,0,0,0" VerticalAlignment="Bottom" Width="50"/>
                                             <ToggleButton Style="{StaticResource ToggleSwitchStyleCam}"  HorizontalAlignment="Left" VerticalAlignment="Bottom" Height="19" Width="40" Background="IndianRed" 
@@ -514,7 +515,7 @@
                                         <StackPanel Margin="0,10,0,0">
                                             <Label Content="Volume" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
                                             <Slider HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="185" 
-                                                    AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="2.5"
+                                                    AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="3"
                                             Value="{Binding SettingsViewModel.VolumeValue}"/>
                                         </StackPanel>
 
@@ -541,8 +542,8 @@
                                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                                 <CheckBox Foreground="WhiteSmoke" Content="Enable Graph" HorizontalAlignment="Left" Margin="5,0,0,1" VerticalAlignment="Bottom" 
                                                 IsChecked="{Binding SettingsViewModel.EnableSoundVisualPublish}"/>
-                                                <StackPanel Margin="30,0,0,0">
-                                                    <RadioButton Content="Signal" Foreground="WhiteSmoke" IsChecked="True"/>
+                                                <StackPanel Margin="20,0,0,0">
+                                                    <RadioButton Content="Pure Vawe" Foreground="WhiteSmoke" IsChecked="True"/>
                                                     <RadioButton Content="Rectified" Foreground="WhiteSmoke" IsChecked="{Binding SettingsViewModel.RectifiedSignalChecked}"/>
                                                 </StackPanel>
                                                 

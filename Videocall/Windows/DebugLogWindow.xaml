@@ -13,19 +13,73 @@
         <Grid Background="#262626">
             <Button Content="╳" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,0,0" Width="33" Click="CrossBtnClick" WindowChrome.IsHitTestVisibleInChrome="True" />
             <Label Content="Debug Log" HorizontalAlignment="Left" Margin="10,-1,0,0" VerticalAlignment="Top"/>
-            <!--<Button Content="🗖" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,35,0" Width="33" Click="MaximizeBtcClicked" WindowChrome.IsHitTestVisibleInChrome="True"/>
-            <Button Content="🗕" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,70,0" Width="33" Click="MinimizeBtnClick" WindowChrome.IsHitTestVisibleInChrome="True"/>-->
+            <Button Content="🗖" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,35,0" Width="33" Click="MaximizeClicked" WindowChrome.IsHitTestVisibleInChrome="True"/>
+            <Button Content="🗕" HorizontalAlignment="Right" VerticalAlignment="Top" Height="24" Margin="0,0,70,0" Width="33" Click="MinimizeClicked" WindowChrome.IsHitTestVisibleInChrome="True"/>
 
 
         </Grid>
         <Grid Margin="0,28,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-               
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" x:Name="DebugLog" HorizontalAlignment="Stretch" TextWrapping="Wrap" IsReadOnly="True" VerticalScrollBarVisibility="Visible"
-                 Text="{Binding Path=(local:DebugLogWindow.LogText)}" VerticalAlignment="Stretch" Width="auto" Height="auto" TextChanged="DebugLog_TextChanged"/>
-
+            <!--<TextBox Grid.Column="0" x:Name="DebugLog" HorizontalAlignment="Stretch" TextWrapping="Wrap" IsReadOnly="True" VerticalScrollBarVisibility="Visible"
+                 Text="{Binding Path=(local:DebugLogWindow.LogText)}" VerticalAlignment="Stretch" Width="auto" Height="auto" TextChanged="DebugLog_TextChanged"/>-->
+            <!--<ScrollViewer  Margin="0,0,0,0" VirtualizingStackPanel.VirtualizationMode="Recycling" Background="Black">
+            <ItemsControl x:Name="tStack" ItemsSource="{Binding Logs}" Background="#121212" AlternationCount="2">
+                <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                            <Label Height="30" Foreground="WhiteSmoke">
+                                <Label.Style>
+                                    <Style TargetType="{x:Type Label}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex), 
+                                                   RelativeSource={RelativeSource AncestorType={x:Type ContentPresenter}}}" 
+                                 Value="0">
+                                                <Setter Property="Background" Value="#151515" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Path=(ItemsControl.AlternationIndex), 
+                                                   RelativeSource={RelativeSource AncestorType={x:Type ContentPresenter}}}" 
+                                 Value="1">
+                                                <Setter Property="Background" Value="#101010" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Label.Style>
+                                <ContentPresenter Content="{Binding Message}" />
+                            </Label>
+                           
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>-->
+            <DataGrid Margin="-7,0,0,0"  ItemsSource="{Binding Logs}"  HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AutoGenerateColumns="False"  AlternatingRowBackground="#151515" RowBackground="#101010" AlternationCount="1" Background="Black"
+                      CanUserAddRows="False" CanUserReorderColumns="False">
+                <DataGrid.Resources>
+                    <Style BasedOn="{StaticResource {x:Type DataGridColumnHeader}}" TargetType="{x:Type DataGridColumnHeader}">
+                        <Setter Property="Background" Value="#202020" />
+                        <Setter Property="Foreground" Value="WhiteSmoke" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="TimeStamp" Binding="{Binding Timestamp}" Foreground="WhiteSmoke" MinWidth="130"/>
+                    <DataGridTextColumn Header="Type" Binding="{Binding LogType}" Foreground="WhiteSmoke" MinWidth=" 50"/>
+                    <DataGridTextColumn Header="Log" Binding="{Binding Message}" Foreground="WhiteSmoke" Width="*" >
+                        <DataGridTextColumn.ElementStyle>
+                            <Style>
+                                <Setter Property="TextBlock.TextWrapping" Value="Wrap" />
+                                <Setter Property="TextBlock.FontFamily" Value="Inter" />
+                                <Setter Property="TextBlock.FontSize" Value="13" />
+                                <Setter Property="TextBlock.TextAlignment" Value="Left"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
         </Grid>
         
     </Grid>

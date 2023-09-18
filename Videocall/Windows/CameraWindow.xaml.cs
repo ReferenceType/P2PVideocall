@@ -15,7 +15,7 @@ namespace Videocall
         public CameraWindow()
         {
             InitializeComponent();
-            CallStateManager.StaticPropertyChanged += CallHandlerStateChanged;
+            CallStateManager.Instance.StaticPropertyChanged += CallHandlerStateChanged;
             var chr = new WindowChrome();
             //chr.GlassFrameThickness =  new Thickness(1,1,1,1);
             chr.ResizeBorderThickness = new Thickness(10, 10, 10, 10);

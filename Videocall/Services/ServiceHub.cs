@@ -36,6 +36,7 @@ namespace Videocall
         public ScreenShareHandlerH264 ScreenShareHandler { get; }
 
         public Action<VCStatistics> VideoStatisticsAvailable;
+        public Action<int,int> CamSizeFeedbackAvailable;
         private VCStatistics stats;
         private VCStatistics statsPrev;
       
@@ -50,8 +51,9 @@ namespace Videocall
 
             AudioHandler.StartSpeakers();
             MessageHandler.OnMessageAvailable += HandleMessage;
-            CallStateManager.StaticPropertyChanged += CallStateChanged;
+            CallStateManager.Instance.StaticPropertyChanged += CallStateChanged;
             AudioHandler.OnStatisticsAvailable += OnAudioStatsAvailable;
+            VideoHandler.CamSizeFeedbackAvailable = (w, h) => CamSizeFeedbackAvailable?.Invoke(w, h);
             PublishStatistics();
         }
 
@@ -71,6 +73,7 @@ namespace Videocall
                     stats.AverageLatency = vs.AverageLatency;
                     stats.ReceiveRate = vs.ReceiveRate + scs.ReceiveRate;
                     stats.CurrentMaxBitRate = vs.CurrentMaxBitRate;
+                    
                     if(statsPrev != stats)
                     {
                         statsPrev = stats;

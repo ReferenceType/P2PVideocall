@@ -7,8 +7,20 @@ namespace Videocall
 {
     internal class CallStateManager 
     {
-        public static event EventHandler<PropertyChangedEventArgs> StaticPropertyChanged;
-        protected static void OnPropertyChanged([CallerMemberName] string name = null)
+        private static CallStateManager instance;
+        internal static CallStateManager Instance { 
+            get
+            {
+                if(instance == null)
+                {
+                    instance = new CallStateManager();
+                }
+                return instance;
+            }
+        }
+
+        public event EventHandler<PropertyChangedEventArgs> StaticPropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string name = null)
         {
             StaticPropertyChanged?.Invoke(null, new PropertyChangedEventArgs(name));
         }
@@ -20,23 +32,23 @@ namespace Videocall
             ReceivingCall,
             OnCall,
         }
-        static CallState cs = CallState.Available;
-        static CallState currentState { get => cs; set 
+        CallState cs = CallState.Available;
+        CallState currentState { get => Instance.cs; set 
             {
                 cs= value;
                 CurrentState = Enum.GetName(typeof(CallState), cs);
             } }
 
-        public static string CurrentState { get => currentState1; set { currentState1 = value; OnPropertyChanged(); } }
+        public string CurrentState { get => currentState1; set { currentState1 = value; OnPropertyChanged(); } }
 
         private static string currentState1 = "Available";
-        static Guid CallingWith;
+        Guid CallingWith;
 
 
         public static void RegisterCall(Guid callingWith)
         {
-            CallingWith = callingWith;
-            currentState= CallState.OnCall;
+            Instance.CallingWith = callingWith;
+            Instance.currentState = CallState.OnCall;
             //AsyncToastNotificationHandler.ShowInfoNotification("You are on call",3000);
 
 
@@ -44,9 +56,9 @@ namespace Videocall
 
         public static void UnregisterCall(Guid callingWith)
         {
-            if(callingWith == CallingWith)
+            if(callingWith == Instance.CallingWith)
             {
-                currentState = CallState.Available;
+                Instance.currentState = CallState.Available;
                // AsyncToastNotificationHandler.ShowInfoNotification("Call Ended", 3000);
             }
                 
@@ -55,9 +67,9 @@ namespace Videocall
 
         public static void EndCall()
         {
-            if (currentState != CallState.Available)
+            if (Instance.currentState != CallState.Available)
             {
-                currentState = CallState.Available;
+                Instance.currentState = CallState.Available;
                 //AsyncToastNotificationHandler.ShowInfoNotification("Call Ended");
             }
             
@@ -66,26 +78,28 @@ namespace Videocall
 
         public static void Calling()
         {
-            if (currentState == CallState.Available)
+            if (Instance.currentState == CallState.Available)
             {
-                currentState = CallState.Calling;
+                Instance.currentState = CallState.Calling;
 
             }
         }
 
         public static void ReceivingCall()
         {
-            if (currentState == CallState.Available)
+            if (Instance.currentState == CallState.Available)
             {
-                currentState = CallState.ReceivingCall;
+                Instance.currentState = CallState.ReceivingCall;
 
             }
         }
-        public static bool CanReceiveCall() => currentState == CallState.Available;
-        public static bool CanSendCall() => currentState == CallState.Available;
-        public static CallState GetState() => CallStateManager.currentState;
-        public static Guid GetCallerId() => CallingWith;
-        public static bool IsOnACall =>currentState == CallState.OnCall;
-        internal static void CallRejected() => currentState = CallState.Available;
+        public static bool CanReceiveCall() => Instance.currentState == CallState.Available;
+        public static bool CanSendCall() => Instance.currentState == CallState.Available;
+        public static CallState GetState() => CallStateManager.Instance.currentState;
+        public static Guid GetCallerId() => Instance.CallingWith;
+        public static bool IsOnACall =>Instance.currentState == CallState.OnCall;
+
+
+        internal static void CallRejected() => Instance.currentState = CallState.Available;
     }
 }

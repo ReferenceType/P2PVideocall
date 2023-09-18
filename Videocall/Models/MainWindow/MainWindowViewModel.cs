@@ -83,13 +83,15 @@ public class MainWindowViewModel : PropertyNotifyBase
 
     public bool ShareScreenChecked { get => shareScreenChecked; 
         set { shareScreenChecked = value; HandleShareScreenChecked(value); OnPropertyChanged(); } }
-
+    private string callStatus = "Available";
     public bool WindowsActive { get; internal set; }
+    public string CallStatus { get => callStatus; set{ callStatus = value; OnPropertyChanged(); } }
 
     private ServiceHub services;
     private MainWindowModel model;
 
     private ChatSerializer chatSerializer;
+
     internal MainWindowViewModel()
     {
         services = ServiceHub.Instance;
@@ -103,7 +105,7 @@ public class MainWindowViewModel : PropertyNotifyBase
         LoadMoreMessages();
         DispatcherRun(()=> SrollToEndChatWindow?.Invoke());
         MainWindowEventAggregator.Instance.ClearChatHistoryRequested += ClearChatHistory;
-
+        CallStateManager.Instance.StaticPropertyChanged += (ignore, v) => { Application.Current.Dispatcher.Invoke(() => CallStatus = CallStateManager.Instance.CurrentState); };
     }
 
     private void ClearChatHistory()

@@ -119,7 +119,7 @@
                                  Stroke="Gray" StrokeThickness="0.2"
                                  HorizontalAlignment="Stretch">
                                     <Ellipse.Fill>
-                                        <ImageBrush ImageSource="Resources/m2.png" Stretch="Fill"/>
+                                        <ImageBrush ImageSource="Resources/m2.png" Stretch="Uniform"/>
                                     </Ellipse.Fill>
                                     <Ellipse.Effect>
                                         <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.3" Direction="260" />

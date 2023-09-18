@@ -190,8 +190,8 @@ namespace Videocall.Services.ScreenShare
                                    
                                    
                                     int stride = ((((width * 24) + 31) & ~31) >> 3);
-                                    int linesize = stride;
-                                    int data_ptr = linesize * (height - 1); // ptr to last line
+                                    int lineLenght = stride;
+                                    int data_ptr = lineLenght * (height - 1); // ptr to last line
 
                                     var buff = stream.GetBuffer();
                                    // 54 is info header of encoded bmp.

@@ -24,6 +24,7 @@ namespace Videocall
         private int numSeqBuffered = 0;
         private AutoResetEvent bufferFullEvent = new AutoResetEvent(false);
         private DateTime lastIn = DateTime.Now;
+        private int lastSeq;
 
         public JitterBuffer(int bufferLatency)
         {
@@ -36,7 +37,7 @@ namespace Videocall
         {
             Thread t = new Thread(() =>
             {
-                ushort lastSeq = 0;
+                lastSeq = 0;
                 while (true)
                 {
                     bufferFullEvent.WaitOne();
@@ -168,6 +169,7 @@ namespace Videocall
                     numSeqBuffered--;
 
                 }
+                lastSeq = 0;
             }
 
         }

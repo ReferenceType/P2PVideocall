@@ -69,7 +69,6 @@ namespace Videocall.Models.MainWindow
 
         public void CreateInfoChatEntry(string info,string url = null)
         {
-           
             URI = url;
           
             Message = info;
@@ -78,11 +77,11 @@ namespace Videocall.Models.MainWindow
             BackgroundColor = System.Windows.Media.Color.FromRgb(50, 50, 50);
         }
 
+        const string Pattern = @"^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$";
+        readonly Regex Rgx = new Regex(Pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
         bool IsValidURL(string URL)
         {
             if (string.IsNullOrEmpty(URL)) return false;
-            string Pattern = @"^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$";
-            Regex Rgx = new Regex(Pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
             return Rgx.IsMatch(URL);
         }
     }

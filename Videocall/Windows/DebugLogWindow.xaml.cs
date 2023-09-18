@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -17,6 +18,12 @@ using System.Windows.Shell;
 
 namespace Videocall
 {
+    public class Log
+    {
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+        public string Message { get; set; }
+        public string LogType { get; set; }
+    }
     /// <summary>
     /// Interaction logic for DebugLogWindow.xaml
     /// </summary>
@@ -25,12 +32,11 @@ namespace Videocall
         private static DebugLogWindow instance;
         public static DebugLogWindow Instance
         { 
-            get 
-
+            get
             {
                 if(instance == null)
                 {
-                    instance= new DebugLogWindow();
+                    Application.Current.Dispatcher.Invoke(() => { instance = new DebugLogWindow(); });
                 }
                 return instance;
           } 
@@ -42,25 +48,34 @@ namespace Videocall
         }
 
         private static string logText = "Test";
-
+         
         public static string LogText { get => logText; set { logText = value; OnPropertyChanged(); } }
-        static StringBuilder sb = new StringBuilder();
 
+        public ObservableCollection<Log> Logs { get => logs; set { logs = value; OnPropertyChanged(); } }
+
+        static StringBuilder sb = new StringBuilder();
+        private ObservableCollection<Log> logs =
+            new ObservableCollection<Log>();
         public DebugLogWindow()
         {
             instance= this;
             var chr = new WindowChrome();
             chr.ResizeBorderThickness = new Thickness(10, 10, 10, 10);
             WindowChrome.SetWindowChrome(this, chr);
+            DataContext = this;
             InitializeComponent();
         }
-
         public static void AppendLog(string logType, string message)
+        {
+            Instance.AppendLog_(logType, message);
+        }
+        private void AppendLog_(string logType, string message)
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                sb.AppendLine("[" + logType + "]" + "[" + DateTime.Now.ToString() + "] : " + message);
-                LogText = sb.ToString();
+               // sb.AppendLine("[" + logType + "]" + "[" + DateTime.Now.ToString() + "] : " + message);
+               // LogText = sb.ToString();
+               Logs.Add(new Log() { Message = message, LogType = logType});
             });
         }
 
@@ -77,6 +92,17 @@ namespace Videocall
         private void DebugLog_TextChanged(object sender, TextChangedEventArgs e)
         {
             
+        }
+
+        private void MaximizeClicked(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = WindowState.Maximized;
+        }
+
+        private void MinimizeClicked(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = WindowState.Minimized;
+
         }
     }
 }

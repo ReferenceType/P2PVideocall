@@ -96,7 +96,8 @@
     <SignManifests>true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="H264Sharp64">
+    <Reference Include="H264Sharp64, Version=0.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\source\repos\OpenH264Wrapper2\x64\Release\H264Sharp64.dll</HintPath>
     </Reference>
     <Reference Include="NetworkLibrary, Version=2.0.1.0, Culture=neutral, processorArchitecture=MSIL">
@@ -170,7 +171,6 @@
     <Compile Include="Services\File Transfer\FileShare.cs" />
     <Compile Include="Models\MainWindow\PeerInfo.cs" />
     <Compile Include="Models\Settings\SettingsViewModel.cs" />
-    <Compile Include="Services\Video\VideoHandler.cs" />
     <Page Include="UserControls\SoundVisualizer.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>

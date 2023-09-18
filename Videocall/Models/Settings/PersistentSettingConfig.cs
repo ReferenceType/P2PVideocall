@@ -81,6 +81,9 @@ namespace Videocall
             }
         }
 
+        public bool AutoAcceptCalls { get => autoAcceptCalls; set { autoAcceptCalls = value; OnPropertyChanged(); } }
+
+        private bool autoAcceptCalls = false;
         private bool reliableIDR = true;
         private bool enableCongestionAvoidance = true;
         public static void SerializeToJsonAndSave()

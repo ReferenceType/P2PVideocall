@@ -56,7 +56,7 @@ namespace Videocall
                 {
                     StartMic();
                 }
-                else /*if (!CallStateManager.IsOnACall)*/
+                else if (!CallStateManager.IsOnACall)
                 {
                     StopMic();
                 }
@@ -91,7 +91,7 @@ namespace Videocall
         private readonly G722CodecState encoderState;
         private readonly G722CodecState decoderState;
         private readonly G722Codec codec;
-        private WaveFormat format = new WaveFormat(24000, 16, 1);
+        private readonly WaveFormat format = new WaveFormat(24000, 16, 1);
         private VolumeSampleProvider volumeSampleProvider;
         private Queue<AudioSample> delayedSamples =  new Queue<AudioSample>();
         private SharerdMemoryStreamPool streamPool = new SharerdMemoryStreamPool();
@@ -121,7 +121,6 @@ namespace Videocall
             player.DesiredLatency = 60;
             player.Init(volumeSampleProvider);
             player.Volume = 1;
-        
 
             jitterBuffer = new JitterBuffer(BufferLatency);
             jitterBuffer.OnSamplesCollected += DecodeAudio;
@@ -142,14 +141,11 @@ namespace Videocall
 
         }
 
-       
-
         private void MicrophoneSampleAvailable(object sender, WaveInEventArgs e)
         {
             try
             {
                 byte[] res;
-               
                 res = EncodeG722(e.Buffer, 0, e.BytesRecorded, out int encoded);
                 currentSqnNo++;
                 AudioSample sample = new AudioSample()
@@ -159,6 +155,10 @@ namespace Videocall
                     Data = res,
                     DataLenght = encoded,
                 };
+
+                if (EnableSoundVisualData)
+                    CalculateAudioVisualData(e.Buffer, 0, e.BytesRecorded);
+
                 if (LoopbackAudio)
                 {
                     //Random r = new Random(DateTime.Now.Millisecond);
@@ -169,10 +169,12 @@ namespace Videocall
 
                     //directly to device
                     DecodeAudio(sample.Data, 0, sample.DataLenght);
+                    
                     return;
                 }
 
                 OnAudioAvailable?.Invoke(sample);
+                
 
                 if (SendMultiStream)
                 {
@@ -188,7 +190,6 @@ namespace Videocall
                 else
                 {
                     BufferPool.ReturnBuffer(sample.Data);
-
                 }
                
             }
@@ -199,7 +200,7 @@ namespace Videocall
         public void HandleRemoteAudioSample(AudioSample sample)
         {
             jitterBuffer.AddSample(sample);
-            // after jitter decode
+            // jitter buffer will send them to decode.
         }
 
         private void DecodeAudio(byte[] soundBytes,int offset, int count)
@@ -212,13 +213,13 @@ namespace Videocall
             int offset_ = 0;
           
             soundListenBuffer?.AddSamples(buffer,offset_,pos);
-            if (EnableSoundVisualData)
-                CalculateAudioVisualData(buffer, offset_, pos);
+            
             streamPool.ReturnStream(DecodeStream);
 
             var current = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds+jitterBuffer.Duration;
             BufferedDurationAvg = (50 * BufferedDurationAvg + current) / 51;
         }
+
         float[] sums = new float[20];
 
         private void CalculateAudioVisualData(byte[] buffer, int offset_, int count)
@@ -275,7 +276,7 @@ namespace Videocall
                     {
                         var sp = (short*)p;
                         short val = *sp;
-                        aLvl += (val + (val >> 31)) ^ (val >> 31);
+                        aLvl += (val + (val >> 31)) ^ (val >> 31);// abs val
                         sp++;
                     }
                 }
@@ -301,6 +302,7 @@ namespace Videocall
             try
             {
                 waveIn.StartRecording();
+                currentSqnNo = 0;
             }
             catch { }
         }
@@ -309,6 +311,7 @@ namespace Videocall
             try
             {
                 waveIn.StopRecording();
+                currentSqnNo = 0;
             }
             catch { }
         }

@@ -78,6 +78,11 @@ namespace Videocall
 
         private void HandleDisconnected()
         {
+            foreach (var item in registeredPeers)
+            {
+                registeredPeers.TryRemove(item.Key, out _);
+                OnPeerUnregistered?.Invoke(item.Key);
+            }
             OnDisconnected?.Invoke();
         }
 
@@ -89,7 +94,7 @@ namespace Videocall
 
         private void HandlePeerRegistered(Guid id)
         {
-           registeredPeers.TryAdd(id,true);
+            registeredPeers.TryAdd(id,true);
             Console.WriteLine("Peer Registered");
             OnPeerRegistered?.Invoke(id);
         }
@@ -283,7 +288,12 @@ namespace Videocall
 
         internal void Disconnect()
         {
-           client.Disconnect();
+            foreach (var item in registeredPeers)
+            {
+                registeredPeers.TryRemove(item.Key, out _);
+                OnPeerUnregistered?.Invoke(item.Key);
+            }
+            client.Disconnect();
         }
 
         internal Task<bool> ConnectAsync(string v1, int v2)

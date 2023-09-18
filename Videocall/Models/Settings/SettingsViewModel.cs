@@ -277,10 +277,23 @@ namespace Videocall.Settings
             services.AudioHandler.OnSoundLevelAvailable = SoundVisualDataAvailable;
 
             services.VideoStatisticsAvailable = HandleVideoStatistics;
+            services.CamSizeFeedbackAvailable = HandleCamSizeFeedback;
             HandleConnectRequest(null);
             MainWindowEventAggregator.Instance.PeerRegistered += OnPeerRegistered;
 
             ApplyCamSettings(null);
+        }
+
+        private void HandleCamSizeFeedback(int w, int h)
+        {
+            if (Config.CamFrameHeight != h)
+            {
+                Config.CamFrameHeight = h;
+            }
+            if (Config.CamFrameWidth != w)
+            {
+                Config.CamFrameWidth = w;
+            }
         }
 
         private void SoundVisualDataAvailable(SoundSliceData data)
@@ -299,6 +312,7 @@ namespace Videocall.Settings
             AverageLatency =        "Average Latency:     " + statistics.AverageLatency.ToString("N1") + " ms";
             IncomingFrameRate =     "Incoming Frame Rate: " + statistics.IncomingFrameRate.ToString("N0") + " Fps";
             IncomingImageDataRate = "Incoming Data Rate:  " + statistics.ReceiveRate.ToString("N0") + " Kb/s";
+            
             if (Config.EnableCongestionAvoidance)
             {
                 var drop = (Config.TargetBps * 1000 - statistics.CurrentMaxBitRate);
@@ -306,14 +320,13 @@ namespace Videocall.Settings
                 Congestion = (int)(per * 100);
                 MaxBps = "Max Kbps:" + statistics.CurrentMaxBitRate / 1000;
             }
-
             else
             {
                 MaxBps = "";
                 Congestion = 0;
             }
                
-
+           
         }
 
         private void OnPeerRegistered(PeerInfo info)
@@ -351,15 +364,20 @@ namespace Videocall.Settings
             try
             {
                 AddLog("\nConnecting..");
-                await services.MessageHandler.ConnectAsync(Dns.GetHostAddresses(Config.Ip)[0].ToString(), int.Parse(Config.Port));
-                AddLog("\nConnected");
+                var addr = Dns.GetHostAddresses(Config.Ip);
+                if (addr == null)
+                    throw new Exception("No address found");
+                bool result = await services.MessageHandler.ConnectAsync(addr[0].ToString(), int.Parse(Config.Port));
+                if(result)
+                    AddLog("\nConnected");
+                else
+                    AddLog("\nFailed");
             }
-            catch
+            catch(Exception e)
             {
-                AddLog("\nError..");
+                AddLog("\n[Error]"+e.Message);
                 if (Config.AutoReconnect)
-                    Task.Run(async () => { await Task.Delay(3000); HandleConnectRequest(null); });
-
+                    Task.Delay(3000).ContinueWith(s => HandleConnectRequest(null));
             }
 
         }

@@ -6,6 +6,7 @@ using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using OpenCvSharp.WpfExtensions;
 using ProtoBuf;
+using ProtoBuf.Meta;
 using ProtoBuf.Serializers;
 using Protobuff;
 using Protobuff.P2P;
@@ -61,7 +62,7 @@ internal class MainWindowModel
         services.AudioHandler.OnAudioAvailable += HandleMicrophoneAudio;
         services.LatencyPublisher.Latency += LatencyDataAvailable;
 
-        CallStateManager.StaticPropertyChanged += CallStateChanged;
+        CallStateManager.Instance.StaticPropertyChanged += CallStateChanged;
         HandleScreenshare();
     }
 
@@ -96,6 +97,7 @@ internal class MainWindowModel
             
             DispatcherRun(() =>
             {
+                services.VideoHandler.FlushBuffers();
                 HandleCamActivated(mainWindowViewModel.CameraChecked);
 
                 mainWindowViewModel.EndCallVisibility = true;
@@ -108,6 +110,7 @@ internal class MainWindowModel
             HandleCamActivated(false);
             DispatcherRun(() =>
             {
+                services.VideoHandler.FlushBuffers();
                 mainWindowViewModel.EndCallVisibility = false;
                 mainWindowViewModel.SecondaryCanvasSource = null;
                 mainWindowViewModel.PrimaryCanvasSource = null;
@@ -709,7 +712,16 @@ internal class MainWindowModel
 
             var info = services.MessageHandler.Serializer.UnpackEnvelopedMessage<PeerInfo>(message);
             //var t1 = AsyncToastNotificationHandler.ShowCallNotification(info.Name);
-            var t2 = AlertWindow.ShowCallDialog(info.Name);
+            Task<string> t2;
+            if (SettingsViewModel.Instance.Config.AutoAcceptCalls)
+            {
+                await Task.Delay(1000);
+                t2 = Task.FromResult(AsyncToastNotificationHandler.CallAccepted);
+            }
+            else
+            {
+                t2 = AlertWindow.ShowCallDialog(info.Name);
+            }
 
             var res = await Task.WhenAny(/*t1,*/ t2);
             var result = res.Result;

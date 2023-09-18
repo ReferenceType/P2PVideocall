@@ -20,33 +20,33 @@ namespace Videocall.Services.Video.H264
    
     internal class H264Transcoder
     {
-       
         public Action<Action<PooledMemoryStream>, int,bool> EncodedFrameAvailable2;
-        private H264Sharp.Encoder encoder;
-        private H264Sharp.Decoder decoder;
         public Action<byte[], int> EncodedFrameAvailable;
         public Action<Mat> DecodedFrameAvailable;
         public Action KeyFrameRequested;
         public ConcurrentBag<Mat> matPool;
-        public bool DecodeNoDelay = false;
+        private bool DecodeNoDelay = true;
         public bool InvokeAction => EncodedFrameAvailable2!=null;
         public double Duration => jitterBufffer.Duration;
-        private int bytesSent = 0;
+        public ushort encoderWidth { get; private set; }
+        public ushort encoderHeight { get; private set; }
+
+        private H264Sharp.Encoder encoder;
+        private H264Sharp.Decoder decoder;
         private JitterBufffer jitterBufffer = new JitterBufffer();
-        private object locker1 = new object();
-        private object locker = new object();
+        private object incrementLocker = new object();
         private object changeLock = new object();
         private byte[] cache = new byte[64000];
         private int keyReq=0;
         private int fps;
         private int bps;
-        private ushort seqNo = 0;
-        public ushort encoderWidth { get; private set; }
-        public ushort encoderHeight { get; private set; }
-        private ushort decoderWidth;
-        private ushort decoderHeight;
         private int frameCnt = 0;
         private int keyFrameInterval = -1;
+        private int bytesSent = 0;
+        private ushort seqNo = 0;
+        private ushort decoderWidth;
+        private ushort decoderHeight;
+    
         public H264Transcoder(ConcurrentBag<Mat> matPool,int desiredFps,int desiredBps)
         {
             this.matPool = matPool;
@@ -67,9 +67,9 @@ namespace Videocall.Services.Video.H264
             {
                 encoder.Dispose();
             }
-            encoder = H264TranscoderProvider.SetupEncoderUnsafe(encoderWidth, encoderHeight, fps: fps, bps: bps, configType);
+            encoder = H264TranscoderProvider.CreateEncoder(encoderWidth, encoderHeight, fps: fps, bps: bps, configType);
             if (decoder == null)
-                decoder = H264TranscoderProvider.SetupDecoder();
+                decoder = H264TranscoderProvider.CreateDecoder();
             this.encoderWidth =(ushort) encoderWidth;
             this.encoderHeight = (ushort)encoderHeight;
         }
@@ -148,7 +148,7 @@ namespace Videocall.Services.Video.H264
 
         private void WriteMetadata(byte[] cache, ref int offset)
         {
-            lock (locker)// its uint16 no interlocked support
+            lock (incrementLocker)// its uint16 no interlocked support
                 seqNo++;
             PrimitiveEncoder.WriteFixedUint16(cache, offset, seqNo);
             PrimitiveEncoder.WriteFixedUint16(cache, offset+2, encoderWidth);
@@ -263,7 +263,7 @@ namespace Videocall.Services.Video.H264
                 encoder?.SetTargetFps(fps);
         }
         // Decode
-        // Goes to jitter, jitter publises, then decode is called.
+        // Goes to jitter, jitter publishes, then decode is called.
         internal unsafe void HandleIncomingFrame( DateTime timeStamp, byte[] payload, int payloadOffset, int payloadCount)
         {
             ushort sqn = BitConverter.ToUInt16(payload, payloadOffset);
@@ -281,7 +281,7 @@ namespace Videocall.Services.Video.H264
                     decoderWidth = w; 
                     decoderHeight = h;
                     decoder.Dispose();
-                    decoder = H264TranscoderProvider.SetupDecoder();
+                    decoder = H264TranscoderProvider.CreateDecoder();
                     jitterBufffer.Reset();
                 }
                
@@ -298,7 +298,7 @@ namespace Videocall.Services.Video.H264
                 fixed (byte* b = &payload[payloadOffset])
                 {
                     if (decoder == null)
-                        decoder = H264TranscoderProvider.SetupDecoder();
+                        decoder = H264TranscoderProvider.CreateDecoder();
 
                     Mat mainMat = null;
                     try
@@ -341,10 +341,12 @@ namespace Videocall.Services.Video.H264
                         {
                             if (--keyReq < 0)
                             {
+#if Debug
                                 Console.WriteLine("KeyFrameRequested");
-                                jitterBufffer.Discard();
+#endif
+                                //jitterBufffer.Discard();
                                 KeyFrameRequested?.Invoke();
-                                keyReq = 4;
+                                keyReq = 5;
                             }
 
                         }
@@ -353,7 +355,9 @@ namespace Videocall.Services.Video.H264
                     {
                         decoder.Dispose();
                         decoder = null;
+#if Debug
                         Console.WriteLine("DecoderBroken: " + e.Message);
+#endif
                         return;
                     }
                     if (mainMat != null)
@@ -374,7 +378,7 @@ namespace Videocall.Services.Video.H264
                 fixed (byte* b = &payload[payloadOffset])
                 {
                     if (decoder == null)
-                        decoder = H264TranscoderProvider.SetupDecoder();
+                        decoder = H264TranscoderProvider.CreateDecoder();
 
                     Mat mainMat = null;
                     try
@@ -393,7 +397,9 @@ namespace Videocall.Services.Video.H264
                             
                             if (--keyReq < 0)
                             {
+#if Debug
                                 Console.WriteLine("KeyFrameRequested");
+#endif
                                 jitterBufffer.Discard();
                                 KeyFrameRequested?.Invoke();
                                 keyReq = 10;
@@ -405,7 +411,9 @@ namespace Videocall.Services.Video.H264
                     {
                         decoder.Dispose();
                         decoder = null;
+#if Debug
                         Console.WriteLine("DecoderBroken: " + e.Message);
+#endif
                         return;
                     }
                     if (mainMat != null)
@@ -414,7 +422,9 @@ namespace Videocall.Services.Video.H264
                     }
                     else
                     {
+#if Debug
                         Console.WriteLine("Bmp null");
+#endif
                     }
                 }
             }
@@ -426,11 +436,10 @@ namespace Videocall.Services.Video.H264
             {
                 encoderWidth = (ushort)frameWidth;
                 encoderHeight = (ushort)frameHeight;
-
                 encoder.Dispose();
                 unsafe
                 {
-                    encoder = H264TranscoderProvider.SetupEncoderUnsafe(frameWidth, frameHeight, fps: fps, bps: targetBitrate, configType);
+                    encoder = H264TranscoderProvider.CreateEncoder(frameWidth, frameHeight, fps: fps, bps: targetBitrate, configType);
                 }
             }
             

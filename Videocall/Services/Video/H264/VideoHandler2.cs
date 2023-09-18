@@ -20,6 +20,7 @@ namespace Videocall.Services.Video.H264
         public Action<Mat> OnRemoteImageAvailable;
         public Action<Action<PooledMemoryStream>, int, bool> OnBytesAvailableAction;
         public Action KeyFrameRequested;
+        public Action<int,int> CamSizeFeedbackAvailable;
 
         public int CaptureIntervalMs = 43;
         public int TargetBitrate = 1_500_000;
@@ -109,7 +110,7 @@ namespace Videocall.Services.Video.H264
             //transcoder.EncodedFrameAvailable = HandleEncodedFrame;
             transcoder.EncodedFrameAvailable2 = HandleEncodedFrame2;
             transcoder.DecodedFrameAvailable = HandleDecodedFrame;
-            transcoder.KeyFrameRequested = () => KeyFrameRequested?.Invoke() ;
+            transcoder.KeyFrameRequested = () => { DebugLogWindow.AppendLog("Info", "Requesting Key Frame"); KeyFrameRequested?.Invoke(); } ;
             transcoder.SetKeyFrameInterval(periodicKeyFrameInterval);
         }
 
@@ -129,7 +130,7 @@ namespace Videocall.Services.Video.H264
             capture.FrameWidth = frameWidth;
             capture.FrameHeight = frameHeight;
             obtainingCamera.Set();
-            DebugLogWindow.AppendLog("[Info] Camera Backend: ", capture.GetBackendName());
+           // DebugLogWindow.AppendLog("[Info] Camera Backend: ", capture.GetBackendName());
 
             transcoder.SetupTranscoder(capture.FrameWidth,capture.FrameHeight,configType);
 
@@ -205,6 +206,7 @@ namespace Videocall.Services.Video.H264
                                 capture.FrameHeight = frameHeight;
                                 frameWidth = capture.FrameWidth;
                                 frameHeight = capture.FrameHeight;
+                                CamSizeFeedbackAvailable?.Invoke(frameWidth, frameHeight);
                             }
                            
                             transcoder.ApplyChanges(fps,TargetBitrate,frameWidth,frameHeight,configType);
@@ -233,6 +235,10 @@ namespace Videocall.Services.Video.H264
 
                         try
                         {
+                          
+                            //var src = InputArray.Create(frame);
+                            //var @out = OutputArray.Create(frame);
+                            //Cv2.FastNlMeansDenoisingColored(src, @out,10,10,3,5);
                             EncodeFrame(frame);
                             OnLocalImageAvailable?.Invoke(frame);
                             capturedFrameCnt++;
@@ -269,16 +275,16 @@ namespace Videocall.Services.Video.H264
                 {
                     keyFrameRequested = false;
                     transcoder.ForceIntraFrame();
-                    Console.WriteLine("Forcing Key Frame");                    
+                    DebugLogWindow.AppendLog("Info","Forcing Key Frame");                    
                 }
-                else
-                {
+                //else
+                //{
                     unsafe
                     {
                         transcoder.Encode(m.DataPointer);
                     }
 
-                }
+                //}
 
             }
             catch (Exception ex) { DebugLogWindow.AppendLog(" Capture encoding failed: ", ex.Message); };
@@ -301,6 +307,7 @@ namespace Videocall.Services.Video.H264
         
         private void HandleEncodedFrame2(Action<PooledMemoryStream> action, int byteLenght, bool isKeyFrame)
         {
+           // Console.WriteLine($"[{DateTime.Now.Millisecond}]ENcoded: " + byteLenght);
             int howManyUnackedAllowed = (int)(AverageLatency / (1000 / Math.Max(1,actualFps))) + 2;
             int pending = Interlocked.CompareExchange(ref unAcked,0,0);
             if (pending > howManyUnackedAllowed)
@@ -308,6 +315,9 @@ namespace Videocall.Services.Video.H264
                 RedcuceQuality(20 * (howManyUnackedAllowed - pending));
             }
             bytesSent += byteLenght;
+            //Random rng = new Random(DateTime.Now.Millisecond);
+            //if (rng.Next(0, 100) % 10 == 0)
+            //    return;
             OnBytesAvailableAction?.Invoke(action,byteLenght,isKeyFrame);
 
         }
@@ -384,6 +394,7 @@ namespace Videocall.Services.Video.H264
                 BumpQuality(2);
             else
             {
+               //RedcuceQuality(100);
                // RedcuceQuality((int)Math.Abs(currentLatency - AverageLatency));
                 //Console.WriteLine("recuced by latency");
             }
@@ -495,6 +506,7 @@ namespace Videocall.Services.Video.H264
                 AverageLatency = AverageLatency,
                 ReceiveRate = receiveRate,
                 CurrentMaxBitRate = currentBps == 0 ? TargetBitrate : currentBps,
+               
             };
 
             return st;
@@ -508,15 +520,17 @@ namespace Videocall.Services.Video.H264
         public float ReceiveRate;
         public double AverageLatency;
         public int CurrentMaxBitRate;
+      
         public override bool Equals(object obj) => obj is VCStatistics other && this.Equals(other);
 
         public bool Equals(VCStatistics p) => IncomingFrameRate == p.IncomingFrameRate
             && OutgoingFrameRate == p.OutgoingFrameRate
             && TransferRate == p.TransferRate
             && ReceiveRate == p.ReceiveRate
-            && AverageLatency == p.AverageLatency;
+            && AverageLatency == p.AverageLatency
+            && CurrentMaxBitRate == p.CurrentMaxBitRate;
 
-        public override int GetHashCode() => (IncomingFrameRate, OutgoingFrameRate, TransferRate, AverageLatency).GetHashCode();
+        public override int GetHashCode() => (IncomingFrameRate, OutgoingFrameRate, TransferRate, AverageLatency,CurrentMaxBitRate).GetHashCode();
 
         public static bool operator ==(VCStatistics lhs, VCStatistics rhs) => lhs.Equals(rhs);
 
