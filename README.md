@@ -8,7 +8,7 @@ Voice-Video Call Wpf Application based on P2PNetwork.
 - H264 Encoding
 - Persisitent Chat
 - Secure File-Folder tree Transfer with MD5 hash file integrity verification(TCP and UDP)
-- High Performance Screen Share based on DirectX 11 (60+ fps @1080p single core).
+- High Performance Screen Share based on DirectX 11 API (60+ fps @1080p single core).
 ## Technical features
 - Secure Udp Hole punching
 - End to End encyrption on Tcp And Udp
