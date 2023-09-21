@@ -2,7 +2,7 @@
 Voice-Video Call Wpf Application based on P2PNetwork.
 <br/>Tested and achieved stable calls between 1.204,5 km distance clients
 <br/>
-<br/>Release available https://github.com/ReferenceType/P2PVideocall/releases/tag/v0.9.0
+<br/>Release available https://github.com/ReferenceType/P2PVideocall/releases/tag/v0.9.1
 ## Features
 - Videocall among connected peers
 - H264 Encoding
