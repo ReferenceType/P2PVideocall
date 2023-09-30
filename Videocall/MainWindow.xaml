@@ -76,12 +76,12 @@
 
                                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
                                                     <TextBlock DockPanel.Dock="Left" Style="{StaticResource WhiteText}" Text="Tcp Latency" HorizontalAlignment="Left"  TextWrapping="Wrap"  VerticalAlignment="Top" Width="80" />
-                                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource WhiteText}"  Text="{Binding TcpLatency}" HorizontalAlignment="Stretch"  TextWrapping="Wrap"  VerticalAlignment="Bottom"  />
+                                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource WhiteText}"  Text="{Binding TcpLatency, StringFormat=N1}" HorizontalAlignment="Stretch"  TextWrapping="Wrap"  VerticalAlignment="Bottom"  />
                                                 </StackPanel>
 
                                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
                                                     <TextBlock Style="{StaticResource WhiteText}" Text="Udp Latency" HorizontalAlignment="Left"  TextWrapping="Wrap"  VerticalAlignment="Top" Width="80" />
-                                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource WhiteText}" Text="{Binding UdpLatency}" HorizontalAlignment="Stretch"  TextWrapping="Wrap"  VerticalAlignment="Bottom"  />
+                                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource WhiteText}" Text="{Binding UdpLatency, StringFormat=N1}" HorizontalAlignment="Stretch"  TextWrapping="Wrap"  VerticalAlignment="Bottom"  />
                                                 </StackPanel>
 
                                             </DockPanel>
@@ -185,15 +185,24 @@
                         </Grid>
 
 
-                        <Label x:Name="WriteMsgGhostText" Content="Write message.." HorizontalAlignment="Left" Margin="16,0,0,27" VerticalAlignment="Bottom" Width="112"/>
+                        <Label x:Name="WriteMsgGhostText" Content="{Binding MainWindowViewModel.SelectedPeerText}" HorizontalAlignment="Left" Margin="16,0,0,27" VerticalAlignment="Bottom" Width="auto"/>
 
-                        <Button Content="Send" HorizontalAlignment="Right" Margin="0,0,5,10" VerticalAlignment="Bottom"  Height="61" Width="45" Command="{Binding MainWindowViewModel.SendTextCommand }" />
-                        <TextBox Style="{StaticResource RoundTextBox}" x:Name="ChatMessageBox"  TextWrapping="Wrap" Height="61" Margin="10,0,55,10" Width=" auto" MinWidth="50" VerticalAlignment="Bottom"   PreviewKeyDown ="OnKeyDownHandler" Foreground="White" Background="#262626" Cursor="Pen" CaretBrush="White" FontWeight="Bold" Opacity="0.8"  AcceptsReturn="True" BorderBrush="DimGray" 
+                        <Button Content="➣" FontSize="30" HorizontalAlignment="Right" Margin="0,0,5,10" VerticalAlignment="Bottom"  Height="61" Width="45" Command="{Binding MainWindowViewModel.SendTextCommand }" />
+                        <TextBox Style="{StaticResource RoundTextBox}" x:Name="ChatMessageBox"  TextWrapping="Wrap" Height="61" Margin="10,0,55,10" Width=" auto" MinWidth="50" VerticalAlignment="Bottom"   PreviewKeyDown ="OnKeyDownHandler" Foreground="White" Background="#262626" CaretBrush="White" FontWeight="Bold" Opacity="0.8"  AcceptsReturn="True" BorderBrush="DimGray" 
                                  Text="{Binding MainWindowViewModel.ChatInputText, Mode=TwoWay }" FontSize="14" GotFocus="ChatMessageBox_GotFocus" LostFocus="ChatMessageBox_LostFocus"/>
 
                         <Rectangle  Height="53" Margin="10,10,5,0" Stroke="#FFCEC7C7" VerticalAlignment="Top" Width="auto"  StrokeThickness="2" RadiusX="5.259" RadiusY="5.259" />
+                        <Button  Content="╳" HorizontalAlignment="Left" VerticalAlignment="Top" Height="20" Margin="15,16,0,0" Width="20" FontSize="8" 
+                                 Visibility="{Binding MainWindowViewModel.FTCancelBtnVisibility,Converter={StaticResource BoolToVis}}"
+                                 Command="{Binding MainWindowViewModel.FTCancelCmd}"/>
 
-                        <Label Content="Drag &amp; Drop Folder or File.." HorizontalAlignment="Left" Margin="10,11,0,0" VerticalAlignment="Top" Width="222"/>
+                        <!--<Label Content="Drag &amp; Drop Folder or File.." HorizontalAlignment="Left" Margin="10,11,0,0" VerticalAlignment="Top" Width="222"/>-->
+                        <ProgressBar x:Name="FileProgress" HorizontalAlignment="Stretch" Height="12" Margin="40,20,10,0" VerticalAlignment="Top" Width="auto" Background="#202020" BorderBrush="Transparent"
+                                                    Value="{Binding MainWindowViewModel.FTProgressPercent}" Foreground="WhiteSmoke"/>
+                        <!--<TextBlock Foreground="Black" Margin="40,16,0,0" Text="{Binding ElementName=FileProgress, Path=Value, StringFormat={}{0:0}%}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top" FontSize="12" FontWeight="Bold"/>-->
+                        <TextBlock Foreground="Black" Margin="45,17,0,0" Text="{Binding MainWindowViewModel.FTProgressRatio}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top" FontSize="12" FontWeight="Bold"/>
                         <Label x:Name="FTProgressText" HorizontalAlignment="left" Margin="10,34,0,0" VerticalAlignment="Top" Width="auto" 
                                Content="{Binding MainWindowViewModel.FTProgressText }"/>
 
@@ -219,13 +228,15 @@
                                     <StackPanel Orientation="Horizontal">
                                         <!--Top Left Left-->
                                         <StackPanel>
-                                            <!--Ip/Host-->
+                                                
+                                                <!--Ip/Host-->
                                             <StackPanel Orientation="Horizontal" Margin="20,30,0,0">
                                                 <Label Content="IP/Host" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
                                                 <TextBox x:Name="IpText" HorizontalAlignment="Left" Margin="20,4,0,0" TextWrapping="Wrap"
                                                             Text="{Binding SettingsViewModel.Config.Ip}" VerticalAlignment="Top" Width="120" 
                                                          ToolTip="Ip/Hostname of the Relay Server"/>
                                             </StackPanel>
+                                            
                                             <!--Port-->
                                             <StackPanel Orientation="Horizontal" Margin="20,15,0,0">
                                                 <Label Content="Port" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
@@ -258,23 +269,31 @@
                                     </StackPanel>
                                     <!--Top Left Lower-->
                                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        
                                         <!--Buttons-->
                                         <StackPanel Margin="10,20,0,0">
-                                            <Button Content="Connect" HorizontalAlignment="Left" Margin="0,10,0,0" 
+                                                <Button Content="Search" HorizontalAlignment="Left" Margin="0,10,0,0" 
+                                                    VerticalAlignment="Top"  Width="78"
+                                                    Command="{Binding SettingsViewModel.SearchServerClicked}" >
+                                                    <Button.Effect>
+                                                        <DropShadowEffect/>
+                                                    </Button.Effect>
+                                                </Button>
+                                                <Button Content="Connect" HorizontalAlignment="Left" Margin="0,20,0,0" 
                                                     VerticalAlignment="Top"  Width="78" 
                                                     Command="{Binding SettingsViewModel.ConnectButtonClickCommand}" >
                                                     <Button.Effect>
                                                         <DropShadowEffect/>
                                                     </Button.Effect>
                                             </Button>
-                                            <Button Content="Disconnect" HorizontalAlignment="Left" Margin="0,15,0,0" 
+                                            <Button Content="Disconnect" HorizontalAlignment="Left" Margin="0,20,0,0" 
                                                     VerticalAlignment="Top"  Width="78"
                                                     Command="{Binding SettingsViewModel.DisconnectButtonClickCommand}" >
                                                     <Button.Effect>
                                                         <DropShadowEffect/>
                                                     </Button.Effect>
                                             </Button>
-                                            <Button Content="TryPunchHole" HorizontalAlignment="Left" Margin="0,15,0,0" 
+                                            <Button Content="TryPunchHole" HorizontalAlignment="Left" Margin="0,20,0,0" 
                                                     VerticalAlignment="Top" Width="79"
                                                     Command="{Binding SettingsViewModel.HolePunchClickCommand}" >
                                                     <Button.Effect>
@@ -286,11 +305,11 @@
                                         <StackPanel Margin="20,10,0,0">
                                             <StackPanel Orientation="Horizontal" Margin="2,0,0,0">
                                                 <TextBlock x:Name="ServerTcpLatency" HorizontalAlignment="Left" Margin="0,0,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="180"
-                                                        Text="{Binding SettingsViewModel.TcpLatency}"/>
+                                                        Text="{Binding SettingsViewModel.TcpLatency,StringFormat=N1}"/>
                                                 <TextBlock x:Name="ServerUdpLatency" HorizontalAlignment="Left" Margin="0,0,0,0" TextWrapping="Wrap"  VerticalAlignment="Top" Width="180"
-                                                        Text="{Binding SettingsViewModel.UdpLatency}"/>
+                                                        Text="{Binding SettingsViewModel.UdpLatency,StringFormat=N1}"/>
                                             </StackPanel>
-                                            <TextBox x:Name="Status" HorizontalAlignment="Left" Margin="0,5,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="356" Height="81" 
+                                            <TextBox x:Name="Status" HorizontalAlignment="Left" Margin="0,5,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="356" Height="125" 
                                                      Text="{Binding SettingsViewModel.LogText}" TextChanged="Status_TextChanged"/>
                                         </StackPanel>
                                     </StackPanel>
@@ -323,15 +342,22 @@
                                                 <ComboBoxItem  Content="Tcp" IsSelected="True"/>
                                             </ComboBox>
 
-                                            <Label  Content="FileTransferChunkSize" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
+                                            <Label  Content="FT Window Size" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
+                                            <TextBox HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap"
+                                            Text="{Binding SettingsViewModel.Config.FTWindowSize}" VerticalAlignment="Top" Width="112" 
+                                                     ToolTip="Represents how many unacklowledged bytes are allowed during file transfer"/>
+                                            
+                                            <Label  Content="FT Chunk Size" HorizontalAlignment="Left" Margin="0,0,0,0" VerticalAlignment="Top"/>
                                             <TextBox x:Name="FtChunk" HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap"
-                                            Text="{Binding SettingsViewModel.Config.ChunkSize}" VerticalAlignment="Top" Width="112" />
+                                            Text="{Binding SettingsViewModel.Config.ChunkSize}" VerticalAlignment="Top" Width="112" 
+                                                     ToolTip="Represents File Chunk size. Files are chunked and send"/>
+                                            
                                         </StackPanel>
                                     </StackPanel>
                                 </StackPanel>
-                            <Rectangle HorizontalAlignment="Left" Height="240"  Stroke="DimGray" VerticalAlignment="Top" Width="802" RadiusX="0" RadiusY="0" Margin="0,2,0,2"/>
+                            <Rectangle HorizontalAlignment="Left" Height="280"  Stroke="DimGray" VerticalAlignment="Top" Width="802" RadiusX="0" RadiusY="0" Margin="0,2,0,2"/>
                         </Grid>
-                            <Image HorizontalAlignment="Left" Height="auto" MaxHeight="240" Margin="2,2,0,2" VerticalAlignment="Top" Width="auto" MaxWidth="400" Source="{Binding MainWindowViewModel.PrimaryCanvasSource }" />
+                            <Image HorizontalAlignment="Left" Height="auto" MaxHeight="280" Margin="2,2,0,2" VerticalAlignment="Top" Width="auto" Source="{Binding MainWindowViewModel.PrimaryCanvasSource }" />
 
                         </StackPanel>
                         <!--Bottom-->

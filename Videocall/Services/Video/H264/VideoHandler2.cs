@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Windows.Markup;
 using Videocall.Settings;
 using static H264Sharp.Encoder;
 
@@ -15,7 +16,7 @@ namespace Videocall.Services.Video.H264
     
     internal class VideoHandler2
     {
-        public Action<byte[], int> OnBytesAvailable;
+        public Action<byte[], int, bool> OnBytesAvailable;
         public Action<Mat> OnLocalImageAvailable;
         public Action<Mat> OnRemoteImageAvailable;
         public Action<Action<PooledMemoryStream>, int, bool> OnBytesAvailableAction;
@@ -300,9 +301,28 @@ namespace Videocall.Services.Video.H264
             consumerSignal.Set();
         }
 
-        private void HandleEncodedFrame(byte[] arg1, int arg2)
+        Random rng = new Random();
+        private void HandleEncodedFrame(byte[] data, int length, bool isKeyFrame)
         {
-            SendImageData(arg1, arg2);
+            int howManyUnackedAllowed = (int)(AverageLatency / (1000 / Math.Max(1, actualFps))) + 2;
+            int pending = Interlocked.CompareExchange(ref unAcked, 0, 0);
+            if (pending > howManyUnackedAllowed)
+            {
+                RedcuceQuality(20 * (howManyUnackedAllowed - pending));
+            }
+            bytesSent += length;
+            //if (rng.Next(0, 100) % 15 == 0)
+            //    return;
+
+            //var dat = ByteCopy.ToArray(data, 0, length);
+            //Task.Delay(rng.Next(0, 500)).ContinueWith((x) =>
+            //{
+            //    OnBytesAvailable?.Invoke(dat, length);
+            //    bytesSent += length;
+
+            //});
+
+            OnBytesAvailable?.Invoke(data, length, isKeyFrame);
         }
         
         private void HandleEncodedFrame2(Action<PooledMemoryStream> action, int byteLenght, bool isKeyFrame)
@@ -320,30 +340,6 @@ namespace Videocall.Services.Video.H264
             //    return;
             OnBytesAvailableAction?.Invoke(action,byteLenght,isKeyFrame);
 
-        }
-
-        Random rng = new Random();
-        private void SendImageData(byte[] data, int length)
-        {
-            int howManyUnackedAllowed = (int)(AverageLatency / (1000/ Math.Max(1, actualFps))) + 2;
-            int pending = Interlocked.CompareExchange(ref unAcked, 0, 0); ;
-            if (timeDict.Count > howManyUnackedAllowed)
-            {
-                RedcuceQuality(5 * (howManyUnackedAllowed - pending));
-            }
-            //if (rng.Next(0, 100) % 15 == 0)
-            //    return;
-
-            //var dat = ByteCopy.ToArray(data, 0, length);
-            //Task.Delay(rng.Next(0, 500)).ContinueWith((x) =>
-            //{
-            //    OnBytesAvailable?.Invoke(dat, length);
-            //    bytesSent += length;
-
-            //});
-
-            bytesSent += length;
-            OnBytesAvailable?.Invoke(data, length);
         }
 
         internal unsafe void HandleIncomingImage(DateTime timeStamp, byte[] payload, int payloadOffset, int payloadCount)

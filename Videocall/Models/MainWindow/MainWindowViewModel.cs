@@ -16,13 +16,18 @@ public class MainWindowViewModel : PropertyNotifyBase
 {
     private string chatText;
     private string chatInputText;
-    private string fTProgressText;
+    private string fTProgressText= FTProgressTextDefault;
+    private const string defaultSelectedPeerTxt = "Write message..";
+    public const string FTProgressTextDefault = "Drag & Drop File or Folder to Chat to Send..";
+    private string selectedPeerText= "Write message..";
+
     private bool cameraChecked;
     private bool shareScreenChecked;
     private bool microponeChecked = false;
     private bool endCallVisibility = false;
     private double windowWidth=1330;
     private double windowHeight=800;
+    private int fTProgressPercent;
 
 
     public Action SrollToEndChatWindow;
@@ -30,6 +35,7 @@ public class MainWindowViewModel : PropertyNotifyBase
     public ICommand CallSelectedCommand { get; }
     public ICommand EndCallCommand { get; }
     public ICommand SendTextCommand { get; }
+    public ICommand FTCancelCmd { get; }
 
 
     private ImageSource primaryCanvasSource;
@@ -62,7 +68,6 @@ public class MainWindowViewModel : PropertyNotifyBase
     public bool MicroponeChecked { get => microponeChecked; 
         set { microponeChecked = value; HandleMicChecked(value); OnPropertyChanged(); } }
 
-    
     public ObservableCollection<PeerInfo> PeerInfos { get; set; }
         = new ObservableCollection<PeerInfo>();
 
@@ -71,7 +76,18 @@ public class MainWindowViewModel : PropertyNotifyBase
 
     private PeerInfo selectedPeer = null;
     public PeerInfo SelectedItem { get => selectedPeer; 
-        set { selectedPeer = value; OnPropertyChanged(); } }
+        set { selectedPeer = value; SelectedPeerChanged(value); OnPropertyChanged(); } }
+
+    private void SelectedPeerChanged(PeerInfo value)
+    {
+        if(value == null)
+        {
+            SelectedPeerText = defaultSelectedPeerTxt;
+        }
+        else
+            SelectedPeerText = $"Write message to {value.Name}..";
+    }
+    public string SelectedPeerText { get => selectedPeerText; set { selectedPeerText = value; OnPropertyChanged(); } }
 
     public bool EndCallVisibility { get => endCallVisibility; 
         set { endCallVisibility = value; OnPropertyChanged(); } }
@@ -87,11 +103,20 @@ public class MainWindowViewModel : PropertyNotifyBase
     public bool WindowsActive { get; internal set; }
     public string CallStatus { get => callStatus; set{ callStatus = value; OnPropertyChanged(); } }
 
+    public int FTProgressPercent { get => fTProgressPercent; set { fTProgressPercent = value; OnPropertyChanged(); } }
+
+    public bool FTCancelBtnVisibility { get => fTCancelBtnVisibility; set { fTCancelBtnVisibility = value; OnPropertyChanged(); } }
+
+    public string FTProgressRatio { get => fTProgressRatio; set { fTProgressRatio = value; OnPropertyChanged(); } }
+
+
+    private string fTProgressRatio;
+    private bool fTCancelBtnVisibility = false;
     private ServiceHub services;
     private MainWindowModel model;
 
     private ChatSerializer chatSerializer;
-
+    public Action OnFtCancelled;
     internal MainWindowViewModel()
     {
         services = ServiceHub.Instance;
@@ -99,6 +124,7 @@ public class MainWindowViewModel : PropertyNotifyBase
         CallSelectedCommand = new RelayCommand(HandleCallSelected);
         EndCallCommand = new RelayCommand(HandleEndCallClicked);
         SendTextCommand = new RelayCommand(HandleChatSend);
+        FTCancelCmd = new RelayCommand(HandleFTCancelCmd);
         model = new MainWindowModel(this,services);
 
         chatSerializer = new ChatSerializer(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
@@ -106,6 +132,11 @@ public class MainWindowViewModel : PropertyNotifyBase
         DispatcherRun(()=> SrollToEndChatWindow?.Invoke());
         MainWindowEventAggregator.Instance.ClearChatHistoryRequested += ClearChatHistory;
         CallStateManager.Instance.StaticPropertyChanged += (ignore, v) => { Application.Current.Dispatcher.Invoke(() => CallStatus = CallStateManager.Instance.CurrentState); };
+    }
+
+    private void HandleFTCancelCmd(object obj)
+    {
+        OnFtCancelled?.Invoke();
     }
 
     private void ClearChatHistory()

@@ -21,7 +21,7 @@ namespace Videocall.Services.Video.H264
     internal class H264Transcoder
     {
         public Action<Action<PooledMemoryStream>, int,bool> EncodedFrameAvailable2;
-        public Action<byte[], int> EncodedFrameAvailable;
+        public Action<byte[], int, bool> EncodedFrameAvailable;
         public Action<Mat> DecodedFrameAvailable;
         public Action KeyFrameRequested;
         public ConcurrentBag<Mat> matPool;
@@ -121,7 +121,7 @@ namespace Videocall.Services.Video.H264
                 offset += frame.Length;
             }
 
-            EncodedFrameAvailable?.Invoke(cache, length+offset);
+            EncodedFrameAvailable?.Invoke(cache, length+offset, isKeyFrame);
 
         }
 
@@ -346,7 +346,7 @@ namespace Videocall.Services.Video.H264
 #endif
                                 //jitterBufffer.Discard();
                                 KeyFrameRequested?.Invoke();
-                                keyReq = 5;
+                                keyReq = 3;
                             }
 
                         }
@@ -402,7 +402,7 @@ namespace Videocall.Services.Video.H264
 #endif
                                 jitterBufffer.Discard();
                                 KeyFrameRequested?.Invoke();
-                                keyReq = 10;
+                                keyReq = 5;
                             }
 
                         }

@@ -31,6 +31,7 @@ namespace Videocall.Settings
         public ICommand HolePunchClickCommand { get; }
         public ICommand ClearChatHistoryCommand { get; }
         public ICommand ApplyCameraSettingsCmd { get; }
+        public ICommand SearchServerClicked { get; }
 
 
         private ComboBoxItem transportLayer = new ComboBoxItem();
@@ -263,6 +264,7 @@ namespace Videocall.Settings
             var services = ServiceHub.Instance;
             instance = this;
             this.services = services;
+            SearchServerClicked = new RelayCommand(HandleServerSearch);
             ConnectButtonClickCommand = new RelayCommand(HandleConnectRequest);
             DisconnectButtonClickCommand = new RelayCommand(OnDisconnectClicked);
             HolePunchClickCommand = new RelayCommand(OnHolePunchClicked);
@@ -282,6 +284,29 @@ namespace Videocall.Settings
             MainWindowEventAggregator.Instance.PeerRegistered += OnPeerRegistered;
 
             ApplyCamSettings(null);
+        }
+
+        private void HandleServerSearch(object obj)
+        {
+            AddLog($"Searching Relay Server on local network with port:{Config.Port}");
+            services.MessageHandler.SearchRelayServer(Config.Port)
+                .ContinueWith(epTask =>
+                {
+                    if (epTask.Result.Count == 0)
+                    {
+                        AddLog("\nUnable to find relay server on local network..");
+                    }
+                    else
+                    {
+                        foreach (var result in epTask.Result)
+                        {
+                            AddLog($"\nRelay Server Found [{result.Name}] : {result.Endpoint}");
+                        }
+                        //Config.Ip = epTask.Result.Address.ToString();
+                    }
+                });
+
+
         }
 
         private void HandleCamSizeFeedback(int w, int h)
@@ -367,7 +392,7 @@ namespace Videocall.Settings
                 var addr = Dns.GetHostAddresses(Config.Ip);
                 if (addr == null)
                     throw new Exception("No address found");
-                bool result = await services.MessageHandler.ConnectAsync(addr[0].ToString(), int.Parse(Config.Port));
+                bool result = await services.MessageHandler.ConnectAsync(addr[0].ToString(), Config.Port);
                 if(result)
                     AddLog("\nConnected");
                 else

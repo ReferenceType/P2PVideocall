@@ -27,6 +27,8 @@ namespace Videocall.Services.Latency
                     await Task.Delay(900);
                     Dictionary<Guid, double> sts = MessageHandler.GetUdpPingStatus();
                     Dictionary<Guid, double> sts2 = MessageHandler.GetTcpPingStatus();
+                    if (sts == null || sts2 == null)
+                        return;
                     LatencyEventArgs args =  new LatencyEventArgs(sts, sts2);
                     Latency?.Invoke(this, args);
                 }

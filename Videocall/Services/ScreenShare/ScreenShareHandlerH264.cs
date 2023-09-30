@@ -27,7 +27,7 @@ namespace Videocall.Services.ScreenShare
     {
 
         public Action<Mat> LocalImageAvailable;
-        public Action<byte[], int> OnBytesAvailable;
+        public Action<byte[], int, bool> OnBytesAvailable;
         public Action<Mat> RemoteImageAvailable;
         public Action KeyFrameRequested;
         public Action<Action<PooledMemoryStream>, int, bool> DecodedFrameWithAction;
@@ -62,7 +62,7 @@ namespace Videocall.Services.ScreenShare
             transcoder = new H264Transcoder(30, 3_000_000);
             transcoder.SetupTranscoder(0, 0, ConfigType.ScreenCaptureBasic);
             transcoder.DecodedFrameAvailable = (f) => { incomingFrames++; RemoteImageAvailable?.Invoke(f); };
-            //transcoder.EncodedFrameAvailable = (b, o) => { bytesSent += o; OnBytesAvailable?.Invoke(b, o); };
+            //transcoder.EncodedFrameAvailable = (b, o, k) => { bytesSent += o; OnBytesAvailable?.Invoke(b, o, k); };
 
             transcoder.EncodedFrameAvailable2 = (action, size, isKeyFrame) => 
             { 

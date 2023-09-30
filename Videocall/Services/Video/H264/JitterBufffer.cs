@@ -21,17 +21,20 @@ namespace Videocall.Services.Video.H264
     internal class JitterBufffer
     {
         public Action<Frame> FrameAvailable;
-        ConcurrentDictionary<ushort, Frame> reorderBuffer = new ConcurrentDictionary<ushort, Frame>();
-        DateTime lastStamp = DateTime.Now;
-        DateTime latestTs = DateTime.Now;
-        DateTime oldestTs = DateTime.Now;
         public double Duration => ((latestTs - oldestTs).TotalMilliseconds);
+        public int MaxNumberOfFramesBuffered = 5;
+
+        private ConcurrentDictionary<ushort, Frame> reorderBuffer = new ConcurrentDictionary<ushort, Frame>();
+        private DateTime lastStamp = DateTime.Now;
+        private DateTime latestTs = DateTime.Now;
+        private DateTime oldestTs = DateTime.Now;
+        private DateTime lastIn = DateTime.Now;
+
         private ushort prevSqn;
         private readonly object locker = new object();
-        DateTime lastIn = DateTime.Now;
-        public int MaxNumberOfFramesBuffered = 5;
-        Stopwatch sw =  new Stopwatch();
-        int incomingFrameCount = 0;
+        private Stopwatch sw =  new Stopwatch();
+        private int incomingFrameCount = 0;
+
         public void HandleFrame(DateTime timeStamp, ushort currentSqn, byte[] payload, int payloadOffset, int payloadCount)
         {
             if (latestTs < timeStamp)
@@ -59,10 +62,11 @@ namespace Videocall.Services.Video.H264
                 Frame f = new Frame { Data = buffer, Count = payloadCount, TimeStamp = timeStamp };
                 reorderBuffer.TryAdd(currentSqn, f);
                 var now = DateTime.Now;
-                if((now-lastIn).TotalMilliseconds<20 && currentSqn != prevSqn + 1 && reorderBuffer.Count > MaxNumberOfFramesBuffered)
-                {
-                    Console.WriteLine("--  Video Buff Forced");
 
+                if((now-lastIn).TotalMilliseconds<15 && currentSqn != prevSqn + 1 && reorderBuffer.Count > MaxNumberOfFramesBuffered)
+                {
+                    //Console.WriteLine("--  Video Buff Forced");
+                    
                     lastIn = now;
                     return;
                 }
@@ -71,7 +75,7 @@ namespace Videocall.Services.Video.H264
                 {
                     var key = reorderBuffer.Keys.Min();
                    
-                    if (reorderBuffer.TryRemove(key, out var ff))
+                    if (reorderBuffer.TryRemove(key, out Frame ff))
                     {
                         oldestTs = ff.TimeStamp;
                         FrameAvailable?.Invoke(ff);

@@ -13,9 +13,11 @@ namespace Videocall
     {
         public static PersistentSettingConfig instance;
         private string ip;
-        private string port;
+        private int port;
         private string name;
-        private string chunkSize = "1000000";
+        private int fTWindowSize = 2560000;
+
+        private int chunkSize = 127000;
         private bool autoReconnect = true;
         private bool autoHolepunch = true;
         private int targetBps = 1500;
@@ -46,10 +48,10 @@ namespace Videocall
         }
       
         public string Ip { get => ip; set { ip = value; OnPropertyChanged(); } }
-        public string Port { get => port; set { port = value; OnPropertyChanged(); } }
+        public int Port { get => port; set { port = value; OnPropertyChanged(); } }
 
         public string Name { get => name; set { name = value; OnPropertyChanged(); } }
-        public string ChunkSize { get => chunkSize; set { chunkSize = value; OnPropertyChanged(); } }
+        public int ChunkSize { get => chunkSize; set { chunkSize = value; OnPropertyChanged(); } }
         public bool AutoReconnect { get => autoReconnect; set { autoReconnect = value; OnPropertyChanged(); } }
         public bool AutoHolepunch { get => autoHolepunch; set { autoHolepunch = value; OnPropertyChanged(); } }
         public int CameraIndex { get => cameraIndex; set {
@@ -82,6 +84,8 @@ namespace Videocall
         }
 
         public bool AutoAcceptCalls { get => autoAcceptCalls; set { autoAcceptCalls = value; OnPropertyChanged(); } }
+
+        public int FTWindowSize { get => fTWindowSize; set => fTWindowSize = value; }
 
         private bool autoAcceptCalls = false;
         private bool reliableIDR = true;

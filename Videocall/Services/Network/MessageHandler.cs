@@ -30,6 +30,7 @@ namespace Videocall
         public const string RemoteClosedCam = "RemoteClosedCam";
         public const string VideoAck = "Vack";
         public const string MicClosed = "MicClosed";
+        public const string RequestKeyFrame = "RequestKeyFrame";
     }
     internal class MessageHandler
     {
@@ -62,10 +63,14 @@ namespace Videocall
 
         public MessageHandler()
         {
+           InitializeClient();
+        }
+        private void InitializeClient()
+        {
             string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             var cert = new X509Certificate2(path + "/client.pfx", "greenpass");
-            client = new RelayClient(cert, 3478);
-           // client.MaxUdpPackageSize = 32000;
+            client = new RelayClient(cert, 0);
+            // client.MaxUdpPackageSize = 32000;
             //client.EnableJumboUdpRateControl = true;
 
             client.OnMessageReceived += TcpMessageReceived;
@@ -80,9 +85,9 @@ namespace Videocall
         {
             foreach (var item in registeredPeers)
             {
-                registeredPeers.TryRemove(item.Key, out _);
                 OnPeerUnregistered?.Invoke(item.Key);
             }
+            registeredPeers.Clear();
             OnDisconnected?.Invoke();
         }
 
@@ -130,9 +135,8 @@ namespace Videocall
                 {
                     MessageEnvelope envelope = new MessageEnvelope();
                     envelope.Header = typeof(T).Name;
-                    client.SendUdpMesssage(id, envelope, message);
+                    client.SendUdpMessage(id, envelope, message);
                 }
-               
 
             }
 
@@ -153,7 +157,7 @@ namespace Videocall
                 if(reliable)
                     client.SendRudpMessage(id, message);
                 else
-                    client.SendUdpMesssage(id, message);
+                    client.SendUdpMessage(id, message);
             }
 
             else
@@ -170,17 +174,17 @@ namespace Videocall
                     client.SendAsyncMessage(id, message, OnBeforeSerialize);
 
                 else
-                    client.SendUdpMesssage(id, message,OnBeforeSerialize);
+                    client.SendUdpMessage(id, message,OnBeforeSerialize);
             }
             else
                 client.SendAsyncMessage(id, message, OnBeforeSerialize);
         }
 
-        public void SendAsyncMessage(Guid peerId,MessageEnvelope envelope)
+        public void SendAsyncMessage(Guid peerId,MessageEnvelope envelope, bool forceTCP=false)
         {
             if (peerId == Guid.Empty)
                 return;
-            if (TransportLayer == "Udp")
+            if (TransportLayer == "Udp" &&!forceTCP)
                 client.SendRudpMessage(peerId, envelope, RudpChannel.Realtime);
 
             else
@@ -188,11 +192,12 @@ namespace Videocall
             
         }
 
-        public void SendAsyncMessage<T>(Guid peerId, MessageEnvelope envelope, T m) where T : IProtoMessage
+
+        public void SendAsyncMessage<T>(Guid peerId, MessageEnvelope envelope, T m, bool forceTCP = false) where T : IProtoMessage
         {
             if (peerId == Guid.Empty)
                 return;
-            if (TransportLayer == "Udp")
+            if (TransportLayer == "Udp" && !forceTCP)
                 client.SendRudpMessage(peerId, envelope, m, RudpChannel.Realtime);
 
             else
@@ -271,29 +276,32 @@ namespace Videocall
                 return client.SendRequestAndWaitResponse(guid, peerInfo, messageHeader, timeout);
         }
 
-        internal RelayClientBase<Protobuff.Components.Serialiser.ProtoSerializer>.PeerInformation GetPeerInfo(Guid peerId)
+        internal PeerInformation GetPeerInfo(Guid peerId)
         {
            return client.GetPeerInfo(peerId);
         }
 
         internal Dictionary<Guid, double> GetUdpPingStatus()
         {
-           return client.GetUdpPingStatus();
+           return client?.GetUdpPingStatus();
         }
 
         internal Dictionary<Guid, double> GetTcpPingStatus()
         {
-            return client.GetTcpPingStatus();
+            return client?.GetTcpPingStatus();
         }
 
         internal void Disconnect()
         {
             foreach (var item in registeredPeers)
             {
-                registeredPeers.TryRemove(item.Key, out _);
                 OnPeerUnregistered?.Invoke(item.Key);
             }
+            registeredPeers.Clear();
             client.Disconnect();
+            client.Dispose();
+            client = null;
+            InitializeClient();
         }
 
         internal Task<bool> ConnectAsync(string v1, int v2)
@@ -304,6 +312,11 @@ namespace Videocall
         internal Task<bool> RequestHolePunchAsync(Guid peerId, int v)
         {
             return client.RequestHolePunchAsync(peerId, v);
+        }
+
+        internal Task<List<ServerInfo>> SearchRelayServer(int port)
+        {
+            return client.TryFindRelayServer(port);
         }
     }
 }

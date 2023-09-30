@@ -29,8 +29,11 @@ using System.Windows;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
+using System.Windows.Threading;
+using System.Xml.Linq;
 using Videocall;
 using Videocall.Models;
+using Videocall.Services.File_Transfer;
 using Videocall.Services.Latency;
 using Videocall.Settings;
 using Windows.Media.Protection.PlayReady;
@@ -43,6 +46,8 @@ internal class MainWindowModel
     private MainWindowViewModel mainWindowViewModel;
     private ServiceHub services;
     private ConcurrentDictionary<Guid, string> peers = new ConcurrentDictionary<Guid, string>();
+    private FileTransferStateManager ftsm = new FileTransferStateManager();
+    int busy = 0;
 
     public MainWindowModel(MainWindowViewModel mainWindowViewModel, ServiceHub services)
     {
@@ -58,12 +63,15 @@ internal class MainWindowModel
         services.MessageHandler.OnMessageAvailable += HandleMessage;
         services.MessageHandler.OnPeerRegistered += HandlePeerRegistered;
         services.MessageHandler.OnPeerUnregistered += HandlePeerUnregistered;
+        services.MessageHandler.OnDisconnected += () => ftsm.CancelAllStates();
 
         services.AudioHandler.OnAudioAvailable += HandleMicrophoneAudio;
         services.LatencyPublisher.Latency += LatencyDataAvailable;
 
         CallStateManager.Instance.StaticPropertyChanged += CallStateChanged;
         HandleScreenshare();
+
+        SetupFileTransferControls();
     }
 
     
@@ -108,6 +116,7 @@ internal class MainWindowModel
         else
         {
             HandleCamActivated(false);
+            services.AudioHandler.StopMic();
             DispatcherRun(() =>
             {
                 services.VideoHandler.FlushBuffers();
@@ -129,7 +138,8 @@ internal class MainWindowModel
     #region Message handling
     private void HandleMessage(MessageEnvelope message)
     {
-        
+        if (message.Header == null)
+            return;
         switch (message.Header)
         {
             case MessageHeaders.Identify:
@@ -147,12 +157,6 @@ internal class MainWindowModel
             case MessageHeaders.FileDirectoryStructure:
                 HandleFile(message);
                 break;
-            case "FTComplete":
-                HandleFile(message);
-                break;
-            case MessageHeaders.FileTransfer:
-                HandleFile(message);
-                break;
             case MessageHeaders.Call:
                 HandleRemoteCallRequest(message);
                 break;
@@ -165,10 +169,12 @@ internal class MainWindowModel
             case MessageHeaders.VideoAck:
                 HandleVideoAck(message);
                 break;
-            case "RequestKeyFrame":
+            case MessageHeaders.RequestKeyFrame:
                 services.VideoHandler.ForceKeyFrame();
                 break;
-
+            default:
+                ftsm.HandleMessage(message);
+                break;
         }
     }
 
@@ -188,6 +194,7 @@ internal class MainWindowModel
 
             CallStateManager.UnregisterCall(id);
         });
+        ftsm.CancelAssociatedState(id);
     }
 
     private void HandlePeerRegistered(Guid peerId)
@@ -260,148 +267,116 @@ internal class MainWindowModel
     #endregion
 
     #region File Transfer
+
+    internal void SetupFileTransferControls()
+    {
+        mainWindowViewModel.OnFtCancelled += () => ftsm.CancelAllStates();
+
+        ftsm.OnTransferCancelled = (state, s) =>
+             DispatcherRun(async () =>
+             {
+                 await Task.Delay(200);
+                 mainWindowViewModel.FTCancelBtnVisibility = false;
+                 mainWindowViewModel.FTProgressText = MainWindowViewModel.FTProgressTextDefault;
+                 mainWindowViewModel.FTProgressRatio = "";
+                 mainWindowViewModel.FTProgressPercent = 0;
+                 mainWindowViewModel.WriteInfoEntry("Send Cancelled : " + s.AdditionalInfo);
+             });
+        ftsm.OnReceiveCancelled = (state, s) =>
+            DispatcherRun(async () =>
+            {
+                await Task.Delay(200);
+                mainWindowViewModel.FTCancelBtnVisibility = false;
+                mainWindowViewModel.FTProgressText = MainWindowViewModel.FTProgressTextDefault;
+                mainWindowViewModel.FTProgressRatio = "";
+                mainWindowViewModel.FTProgressPercent = 0;
+                mainWindowViewModel.WriteInfoEntry("Receive Cancelled : " + s.AdditionalInfo);
+            });
+        ftsm.OnTransferStatus += (state, sts) => {
+            if (Interlocked.CompareExchange(ref busy, 1, 0) == 0)
+                DispatcherRun(async () =>
+                {
+                    mainWindowViewModel.FTCancelBtnVisibility = true;
+                    mainWindowViewModel.FTProgressText = $"Sending %{sts.Percentage.ToString("N1")} {sts.FileName}";
+                    mainWindowViewModel.FTProgressRatio = GetRatio(state);
+                    mainWindowViewModel.FTProgressPercent = state.Progress;
+                    await Task.Delay(40);
+                    Interlocked.Exchange(ref busy, 0);
+
+                });
+        };
+        ftsm.OnTransferComplete += (state, s) =>
+        DispatcherRun(async () =>
+        {
+            await Task.Delay(200);
+            mainWindowViewModel.FTCancelBtnVisibility = false;
+            mainWindowViewModel.FTProgressText = MainWindowViewModel.FTProgressTextDefault;
+            mainWindowViewModel.FTProgressRatio = "";
+            mainWindowViewModel.FTProgressPercent = 0;
+            mainWindowViewModel.WriteInfoEntry("Transfer Complete in " + s.elapsed.ToString(), s.Directory);
+        });
+        ftsm.OnReceiveStatus += (state, sts) =>
+        {
+            if (Interlocked.CompareExchange(ref busy, 1, 0) == 0)
+                DispatcherRun(async () =>
+                {
+                    mainWindowViewModel.FTCancelBtnVisibility = true;
+                    mainWindowViewModel.FTProgressText = $"Receiving %{sts.Percentage.ToString("N1")} {sts.FileName}";
+                    mainWindowViewModel.FTProgressRatio = GetRatio(state);
+                    mainWindowViewModel.FTProgressPercent = state.Progress;
+                    await Task.Delay(40);
+                    Interlocked.Exchange(ref busy, 0);
+
+                });
+        };
+        ftsm.OnReceiveComplete += (state, s) =>
+       DispatcherRun(async () =>
+       {
+           await Task.Delay(200);
+           mainWindowViewModel.FTCancelBtnVisibility = false;
+           mainWindowViewModel.FTProgressText = MainWindowViewModel.FTProgressTextDefault;
+           mainWindowViewModel.FTProgressRatio = "";
+           mainWindowViewModel.FTProgressPercent = 0;
+           mainWindowViewModel.WriteInfoEntry("Received File in " + s.elapsed.ToString(),
+               Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + @"\Shared" + s.Directory);
+       });
+        string GetRatio(IFileTransferState state)
+        {
+            return $"{BytesToString(state.TotalSize * state.Progress / 100)}/{BytesToString(state.TotalSize)}";
+        }
+    }
+    static string[] dataSuffix = { "B", "KB", "MB", "GB", "TB", "PB", "EB" };
+
+    public static string BytesToString(long byteCount)
+    {
+        if (byteCount == 0)
+            return "0" + dataSuffix[0];
+
+        long bytes = Math.Abs(byteCount);
+        int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
+        double num = Math.Round(bytes / Math.Pow(1024, place), 1);
+        return (Math.Sign(byteCount) * num).ToString() + " " + dataSuffix[place];
+    }
     internal void HandleFileDrop(string[] files, Guid selectedPeer)
     {
-        Task.Run(async () =>
-        {
-            FileDirectoryStructure tree = services.FileShare.CreateDirectoryTree(files[0]);
-            services.MessageHandler.SendAsyncMessage(selectedPeer, new MessageEnvelope() { Header= "FileDirectoryStructure" }, tree);
-
-            Stopwatch sw = new Stopwatch();
-            DispatcherRun(() => mainWindowViewModel.FTProgressText = "Computing Hash..");
-
-            List < FileTransfer> fileDatas = 
-            services.FileShare.GetFiles(tree, chunkSize: int.Parse(PersistentSettingConfig.Instance.ChunkSize));
-
-            sw.Start();
-            try
-            {
-                Task prev = null;
-                int windoowSize = Math.Max(1, (int)(20000000 / int.Parse(PersistentSettingConfig.Instance.ChunkSize)));
-                int currentWindow = 0;
-                MD5 md5 = new MD5CryptoServiceProvider();
-                var dispatchedTasks = new List<Task>();
-
-                for (int i = 0; i < fileDatas.Count; i++)
-                {
-                    var fileData = fileDatas[i];
-                    fileData.ReadBytes();
-                    // this one is to calculate hash during transfer progressively, i do it before so i commented this.
-                    //if (fileData.IsLast)
-                    //{
-                    //    md5.TransformFinalBlock(fileData.Data, fileData.dataBufferOffset, fileData.count);
-                    //    fileData.Hashcode = BitConverter.ToString(md5.Hash).Replace("-", "").ToLower();
-                    //    md5.Dispose();
-                    //    md5 = new MD5CryptoServiceProvider();
-                    //}
-                    //else
-                    //{
-                    //    md5.TransformBlock(fileData.Data, fileData.dataBufferOffset, fileData.count, fileData.Data, fileData.dataBufferOffset);
-                    //}
-
-                    var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
-
-                    var res = services.MessageHandler.SendRequesAndWaitResponseFT(selectedPeer,
-                          envelope,
-                          timeout: 1200000, RudpChannel.Ch2);
-#pragma warning disable CS4014 
-                    res.ContinueWith((ignore,state) => 
-                    {
-                        UpdateDispatcher((FileTransfer)state);
-                        ((FileTransfer)state).Release();
-                    },fileData);
-#pragma warning restore CS4014 
-
-                    if (currentWindow == 0)
-                    {
-                        prev = res;
-                    }
-                    if (prev != null && currentWindow == windoowSize)
-                    {
-                        currentWindow = 0;
-                        await prev;
-                        prev = null;
-                    }
-                    else
-                        currentWindow++;
-
-                    dispatchedTasks.Add(res);
-                }
-                void UpdateDispatcher(FileTransfer fileData)
-                {
-                    DispatcherRun(() => 
-                    {
-                        if (fileData.IsLast)
-                            mainWindowViewModel.FTProgressText = "";
-                        else
-                            mainWindowViewModel.FTProgressText = "%"
-                        + (100 * ((float)fileData.SequenceNumber / (float)(fileData.TotalSequences))).ToString("N1")
-                        + " Sending file: " + fileData.FilePath;
-
-                    });
-                }
-                await Task.WhenAll(dispatchedTasks);
-            }
-            catch (Exception ex)
-            {
-                DebugLogWindow.AppendLog("Error", "Filetransfer drag drop encountered an error: " + ex.Message);
-            }
-
-            string name = "";
-            var firstFolder = tree.FileStructure.Keys.First();
-
-            if (!string.IsNullOrEmpty(firstFolder))
-                name += firstFolder;
-            else
-                name += tree.FileStructure.Values.First().First();
-
-            mainWindowViewModel.WriteInfoEntry("Transfer Complete in " + sw.Elapsed.ToString(), tree.seed + name);
-
-            var response = new MessageEnvelope();
-            response.Header = "FTComplete";
-            response.KeyValuePairs = new Dictionary<string, string>() { { name, null } };
-            services.MessageHandler.SendAsyncMessage(selectedPeer, response);
-
-
-        });
+        mainWindowViewModel.FTProgressText = "Preparing files";
+        ftsm.SendFile(files, selectedPeer);
+        return;
+     
     }
 
     private void HandleFile(MessageEnvelope message)
     {
-        if (message.Header == MessageHeaders.FileTransfer)
+        if(message.Header == MessageHeaders.FileDirectoryStructure)
         {
-            var response = new MessageEnvelope();
-            response.MessageId = message.MessageId;
-            response.Header = "FileAck";
-
-            var fileMsg = services.FileShare.HandleFileTransferMessage(message,out string error);
-
-            if (error!=null)
-                mainWindowViewModel.WriteInfoEntry("Error " +error);
-
-            DispatcherRun(() =>
-            {
-                mainWindowViewModel.FTProgressText =
-                "%" + (100 * ((float)fileMsg.SequenceNumber / (float)(fileMsg.TotalSequences))).ToString("N1") 
-                + "Receiving file" + fileMsg.FilePath;
-            });
-            services.MessageHandler.SendAsyncMessage(message.From, response);
-
-
-        }
-        else if (message.Header == MessageHeaders.FileDirectoryStructure)
-        {
-
-            var fileTree = services.FileShare.HandleDirectoryStructure(message);
-            int howManyFiles = fileTree.FileStructure.Values.Select(x => x.Count).Sum();
-            DispatcherRun(() => mainWindowViewModel.FTProgressText = string.Format("Incoming {0} files", howManyFiles));
+            ftsm.HandleReceiveFile(message);
         }
         else
         {
-            mainWindowViewModel.WriteInfoEntry("File Received",
-                Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + @"\Shared" + message.KeyValuePairs.Keys.First());
-            DispatcherRun(() => mainWindowViewModel.FTProgressText = "");
+            ftsm.HandleMessage(message);
         }
+        return;
+      
     }
     #endregion
 
@@ -506,7 +481,7 @@ internal class MainWindowModel
       
     }
     long idx = 0;
-    private void HandleCameraEncodedBytes(byte[] imageBytes, int lenght)
+    private void HandleCameraEncodedBytes(byte[] imageBytes, int lenght, bool isKeyFrame)
     {
         if (CallStateManager.GetState() == CallStateManager.CallState.OnCall &&
           mainWindowViewModel.CameraChecked)
@@ -520,7 +495,8 @@ internal class MainWindowModel
             env.MessageId = Guid.NewGuid();
             services.VideoHandler.ImageDispatched(env.MessageId, env.TimeStamp);
 
-            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, reliable:false);
+            bool isReliable = isKeyFrame && SettingsViewModel.Instance.Config.ReliableIDR;
+            services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, reliable: isReliable);
         }
       
     }
@@ -600,7 +576,7 @@ internal class MainWindowModel
     }
     private void RequestKeyFrame()
     {
-        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), new MessageEnvelope() { Header = "RequestKeyFrame"}, reliable: false);
+        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), new MessageEnvelope() { Header = MessageHeaders.RequestKeyFrame}, reliable: false);
 
     }
     private void HandleVideoAck(MessageEnvelope message)
@@ -841,14 +817,15 @@ internal class MainWindowModel
             });
 
         };
-        ScreenShareHandler.OnBytesAvailable = (byte[] bytes, int count) =>
+        ScreenShareHandler.OnBytesAvailable = (byte[] bytes, int count, bool isKeyFrame) =>
         {
             var env = new MessageEnvelope();
             env.Header = "SCI";
             env.TimeStamp = DateTime.Now;
             env.SetPayload(bytes, 0, count);
 
-            MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, false);
+            bool isReliable = isKeyFrame && SettingsViewModel.Instance.Config.ReliableIDR;
+            MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, isReliable);
         };
         //I know right
         ScreenShareHandler.DecodedFrameWithAction = (writeBufferAction, count, isKeyFrame) =>
@@ -943,11 +920,11 @@ internal class MainWindowModel
     }
     #endregion
 
-    private void DispatcherRun(Action todo)
+    private void DispatcherRun(Action todo, DispatcherPriority priority = DispatcherPriority.Normal)
     {
         try
         {
-            Application.Current?.Dispatcher?.BeginInvoke(todo);
+            Application.Current?.Dispatcher?.BeginInvoke(todo,priority);
 
         }
         catch (Exception ex)
