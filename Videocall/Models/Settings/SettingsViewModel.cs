@@ -454,11 +454,17 @@ namespace Videocall.Settings
                     try
                     {
                         var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
+                        var res2 = await services.MessageHandler.RequestTcpHolePunchAsync(peerId, 5000);
                         if (!res)
-                            AddLog("\nHolePunch Failed on :" + peerId.ToString());
+                            AddLog("\nUDP HolePunch Failed on :" + peerId.ToString());
 
                         else
-                            AddLog("\nHolePunch Sucessfull");
+                            AddLog("\nUDP HolePunch Sucessfull");
+                        if (!res2)
+                            AddLog("\nTCP HolePunch Failed on :" + peerId.ToString());
+
+                        else
+                            AddLog("\nTCPHolePunch Sucessfull");
                     }
                     catch (Exception ee)
                     {

@@ -318,5 +318,10 @@ namespace Videocall
         {
             return client.TryFindRelayServer(port);
         }
+
+        internal Task<bool> RequestTcpHolePunchAsync(Guid peerId, int v)
+        {
+            return client.RequestTcpHolePunchAsync(peerId);
+        }
     }
 }
