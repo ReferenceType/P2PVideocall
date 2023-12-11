@@ -102,7 +102,7 @@ namespace Videocall.Services.ScreenShare
             var ratio = scale; // resize ratio
             try
             {
-                outputDuplication.AcquireNextFrame(500, out var _, out DXGI.Resource frame);
+                outputDuplication.TryAcquireNextFrame(500, out var _, out DXGI.Resource frame);
                 using (frame)
                 {
 

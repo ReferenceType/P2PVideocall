@@ -9,7 +9,6 @@ using Videocall.Models;
 using Videocall.Services.ScreenShare;
 using Videocall.Services.Video.H264;
 using Videocall.UserControls;
-using Windows.Media.Capture;
 
 namespace Videocall.Settings
 {
@@ -54,7 +53,7 @@ namespace Videocall.Settings
         private bool testSCChecked;
         private bool listenYourselfCheck = false;
         private bool sendDoubleAudiocheck = false;
-        
+
 
         private int bufferedDurationPercentage;
         private int congestion = 0;
@@ -231,8 +230,8 @@ namespace Videocall.Settings
                 OnPropertyChanged();
             }
         }
-        public bool RectifiedSignalChecked { get => rectifiedSignalChecked; set 
-            { 
+        public bool RectifiedSignalChecked { get => rectifiedSignalChecked; set
+            {
                 rectifiedSignalChecked = value;
                 OnPropertyChanged();
                 services.AudioHandler.RectifySignal = value;
@@ -254,7 +253,7 @@ namespace Videocall.Settings
 
         public SoundSliceData SoudVisualData { get => soudVisualData; set { soudVisualData = value; OnPropertyChanged(); } }
 
-      
+
 
         private bool enableSoundVisualPublish;
 
@@ -331,17 +330,17 @@ namespace Videocall.Settings
 
         private void HandleVideoStatistics(VCStatistics statistics)
         {
-            ImageTransferRate =     "Outgoing Data Rate:  " + statistics.TransferRate.ToString("N2") + " Kb/s";
-            OutgoingFrameRate =     "Outgoing Frame Rate: " + statistics.OutgoingFrameRate.ToString("N0") + " Fps";
+            ImageTransferRate = "Outgoing Data Rate:  " + statistics.TransferRate.ToString("N2") + " Kb/s";
+            OutgoingFrameRate = "Outgoing Frame Rate: " + statistics.OutgoingFrameRate.ToString("N0") + " Fps";
 
-            AverageLatency =        "Average Latency:     " + statistics.AverageLatency.ToString("N1") + " ms";
-            IncomingFrameRate =     "Incoming Frame Rate: " + statistics.IncomingFrameRate.ToString("N0") + " Fps";
+            AverageLatency = "Average Latency:     " + statistics.AverageLatency.ToString("N1") + " ms";
+            IncomingFrameRate = "Incoming Frame Rate: " + statistics.IncomingFrameRate.ToString("N0") + " Fps";
             IncomingImageDataRate = "Incoming Data Rate:  " + statistics.ReceiveRate.ToString("N0") + " Kb/s";
-            
+
             if (Config.EnableCongestionAvoidance)
             {
                 var drop = (Config.TargetBps * 1000 - statistics.CurrentMaxBitRate);
-                var per = (float)drop/ (float)(Config.TargetBps*1000);
+                var per = (float)drop / (float)(Config.TargetBps * 1000);
                 Congestion = (int)(per * 100);
                 MaxBps = "Max Kbps:" + statistics.CurrentMaxBitRate / 1000;
             }
@@ -350,13 +349,13 @@ namespace Videocall.Settings
                 MaxBps = "";
                 Congestion = 0;
             }
-               
-           
+
+
         }
 
         private void OnPeerRegistered(PeerInfo info)
         {
-            if(Config.AutoHolepunch)
+            if (Config.AutoHolepunch)
                 AutoPunch(info.Guid);
         }
 
@@ -371,7 +370,7 @@ namespace Videocall.Settings
             BufferedDurationPercentage = (int)(((float)stats.BufferedDuration / (float)stats.BufferSize) * 100);
         }
 
-       
+
 
         private void OnLatencyAvailable(object sender, Services.Latency.LatencyEventArgs e)
         {
@@ -393,14 +392,14 @@ namespace Videocall.Settings
                 if (addr == null)
                     throw new Exception("No address found");
                 bool result = await services.MessageHandler.ConnectAsync(addr[0].ToString(), Config.Port);
-                if(result)
+                if (result)
                     AddLog("\nConnected");
                 else
                     AddLog("\nFailed");
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                AddLog("\n[Error]"+e.Message);
+                AddLog("\n[Error]" + e.Message);
                 if (Config.AutoReconnect)
                     Task.Delay(3000).ContinueWith(s => HandleConnectRequest(null));
             }
@@ -416,65 +415,89 @@ namespace Videocall.Settings
             AddLog("\nDisconnected");
             CallStateManager.EndCall();
             if (Config.AutoReconnect)
-                Task.Run(async () => {await Task.Delay(1000); HandleConnectRequest(null); });
+                Task.Run(async () => { await Task.Delay(1000); HandleConnectRequest(null); });
 
         }
-       
+
         private async void AutoPunch(Guid peerId)
         {
-            try
+            if (peerId.CompareTo(services.MessageHandler.SessionId) > 0)
             {
-                if (peerId.CompareTo(services.MessageHandler.SessionId) > 0)
-                {
-                    var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
-                    if (!res)
-                        AddLog("\nHolePunch Failed on :" + peerId.ToString());
-                    else
-                        AddLog("\nHolePunch Sucessfull");
-                }
-                
+                await Punch(peerId);
             }
-            catch (Exception ee)
-            {
-                AddLog("\nError: " + ee.Message);
-            }
+            
+
+            //try
+            //{
+            //    if (peerId.CompareTo(services.MessageHandler.SessionId) > 0)
+            //    {
+            //        var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
+            //        if (!res)
+            //            AddLog("\nHolePunch Failed on :" + peerId.ToString());
+            //        else
+            //            AddLog("\nHolePunch Sucessfull");
+            //    }
+
+            //}
+            //catch (Exception ee)
+            //{
+            //    AddLog("\nError: " + ee.Message);
+            //}
 
         }
 
         private async void OnHolePunchClicked(object obj)
         {
             if (holePunchRequestActive)
+            {
+                AddLog("\nRequest in progress");
                 return;
+            }
 
             holePunchRequestActive = true;
             try
             {
                 foreach (var peerId in services.MessageHandler.registeredPeers.Keys)
                 {
-                    try
-                    {
-                        var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
-                        var res2 = await services.MessageHandler.RequestTcpHolePunchAsync(peerId, 5000);
-                        if (!res)
-                            AddLog("\nUDP HolePunch Failed on :" + peerId.ToString());
-
-                        else
-                            AddLog("\nUDP HolePunch Sucessfull");
-                        if (!res2)
-                            AddLog("\nTCP HolePunch Failed on :" + peerId.ToString());
-
-                        else
-                            AddLog("\nTCPHolePunch Sucessfull");
-                    }
-                    catch (Exception ee)
-                    {
-                        AddLog("\nError: " + ee.Message);
-                    }
+                    await Punch(peerId);
                 }
             }
             finally { holePunchRequestActive = false; }
         }
+        bool punchActive = false;
+        private async Task Punch(Guid peerId)
+        {
+            if(punchActive)
+            {
+                AddLog("\nRequest in progress");
+                return;
+            }
+            try
+            {
+                punchActive = true;
+                var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
+                var res2 = await services.MessageHandler.RequestTcpHolePunchAsync(peerId, 5000);
+                if (!res)
+                    AddLog("\nUDP HolePunch Failed on :" + peerId.ToString());
 
+                else
+                    AddLog("\nUDP HolePunch Sucessfull");
+                if (!res2)
+                    AddLog("\nTCP HolePunch Failed on :" + peerId.ToString());
+
+                else
+                    AddLog("\nTCPHolePunch Sucessfull");
+            }
+            catch (Exception ee)
+            {
+                AddLog("\nError: " + ee.Message);
+            }
+            finally
+            {
+                punchActive = false;
+            }
+        }
+    
 
         private void HandleListenYourselfToggle(bool value)
         {

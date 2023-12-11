@@ -9,11 +9,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Runtime.Remoting.Channels;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace Videocall
 {
@@ -68,8 +66,8 @@ namespace Videocall
         private void InitializeClient()
         {
             string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var cert = new X509Certificate2(path + "/client.pfx", "greenpass");
-            client = new RelayClient(cert, 0);
+          //  var cert = new X509Certificate2(path + "/client.pfx", "greenpass");
+            client = new RelayClient(0);
             // client.MaxUdpPackageSize = 32000;
             //client.EnableJumboUdpRateControl = true;
 

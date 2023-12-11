@@ -17,7 +17,6 @@ using Videocall.Services.Latency;
 using Videocall.Services.ScreenShare;
 using Videocall.Services.Video.H264;
 using Videocall.Settings;
-using Windows.UI.Composition.Scenes;
 
 namespace Videocall
 {
@@ -140,7 +139,10 @@ namespace Videocall
                 File.AppendAllText(workingDir + "/CrashDump.txt", ex);
                
             }
-            Environment.Exit(0);
+            Application.Current.Shutdown();
+            Process.GetCurrentProcess().WaitForExit(2000);
+            Process.GetCurrentProcess().Kill();
+            // Environment.Exit(0);
 
         }
 
@@ -157,6 +159,10 @@ namespace Videocall
             MessageHandler.Disconnect();
             VideoHandler.CloseCamera();
             ScreenShareHandler.StopCapture();
+
+            Application.Current.Shutdown();
+            Process.GetCurrentProcess().WaitForExit(2000);
+            Process.GetCurrentProcess().Kill();
         }
 
         #endregion
@@ -167,10 +173,21 @@ namespace Videocall
             MessageHandler.Disconnect();
             VideoHandler.CloseCamera();
             ScreenShareHandler.StopCapture();
-            Environment.Exit(0);
+            //Environment.Exit(0);
 
             //cameraWindow.Close();
             //this.Close();
+
+
+            Application.Current.Shutdown();
+            Process.GetCurrentProcess().WaitForExit(2000);
+            Process.GetCurrentProcess().Kill();
+        }
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+
+            Application.Current.Shutdown();
         }
         private void Window_StateChanged(object sender, EventArgs e)
         {

@@ -42,7 +42,7 @@ namespace Videocall
                 try
                 {
                     // only on uwp so far..
-                    ToastNotificationManager.History.Remove(notificationId);
+                   // ToastNotificationManager.History.Remove(notificationId);
 
                 }
                 catch(Exception e)
@@ -81,14 +81,16 @@ namespace Videocall
             new ToastContentBuilder()
                 .AddArgument("action", "doubleClicked")
                 .AddArgument("notificationId", notificationId)
-                .AddText(callerName+" Wants to call you")
+                .AddText(callerName + " Wants to call you")
                 .AddText("Would you like to accept the call?")
                 .AddButton(new ToastButton().SetContent("Accept Call").AddArgument("action", "accept"))
                 .AddButton(new ToastButton().SetContent("Reject Call").AddArgument("action", "reject"))
-                .Show(toast => {
+                .Show(toast =>
+                {
                     toast.Tag = notificationId;
                 });
             return await RegisterWait(notificationId, timeout);
+            //return await Task.FromResult("");
         }
 
         public static async Task<string> ShowInfoNotification(string notificationString, int timeout = 5000)
@@ -100,7 +102,8 @@ namespace Videocall
                .AddArgument("action", "doubleClicked")
                .AddArgument("notificationId", notificationId)
                .AddText(notificationString)
-               .Show(toast => {
+               .Show(toast =>
+               {
                    toast.Tag = notificationId;
                    toast.Group = "1";
                    //toast.ExpirationTime = DateTimeOffset.Now + TimeSpan.FromMilliseconds(3000);

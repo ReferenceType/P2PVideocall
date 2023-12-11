@@ -11,7 +11,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.ApplicationModel.Preview.Notes;
 using static H264Sharp.Encoder;
 using System.Windows.Media.Animation;
 

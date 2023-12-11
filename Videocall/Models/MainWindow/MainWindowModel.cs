@@ -36,8 +36,6 @@ using Videocall.Models;
 using Videocall.Services.File_Transfer;
 using Videocall.Services.Latency;
 using Videocall.Settings;
-using Windows.Media.Protection.PlayReady;
-using Windows.UI.Text;
 using PeerInfo = Videocall.PeerInfo;
 
 internal class MainWindowModel
@@ -658,7 +656,7 @@ internal class MainWindowModel
             {
                 CallStateManager.Calling();
                 // todo MY INFO NOT SELECTED
-                var nfo = new PeerInfo(PersistentSettingConfig.Instance.Name,null,0, new Guid()); 
+                var nfo = new PeerInfo(PersistentSettingConfig.Instance.Name,null,0, Guid.Empty); 
                 var response = await services.MessageHandler.SendRequestAndWaitResponse(info.Guid, nfo, MessageHeaders.Call, 10000);
                 if (response.Header != MessageEnvelope.RequestTimeout)
                     HandleCallResponse(response, info);
@@ -716,8 +714,9 @@ internal class MainWindowModel
 
             services.MessageHandler.SendAsyncMessage(message.From, message);
             DebugLogWindow.AppendLog("Info", "Result sent!");
+            var id = services.MessageHandler.SessionId;
             if (result == AsyncToastNotificationHandler.CallAccepted)
-                CallStateManager.RegisterCall(message.To);
+                CallStateManager.RegisterCall(message.From);
             else
                 CallStateManager.EndCall();
         }

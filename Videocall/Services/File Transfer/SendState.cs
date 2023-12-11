@@ -98,41 +98,87 @@ namespace Videocall.Services.File_Transfer
         {
             Cancelled?.Invoke(new Completion() {AdditionalInfo=why, Directory = tree.seed });
         }
+        private readonly object mtex = new object();
         private void SendNextChunk()
         {
+            //try
+            //{
+            //    if (Interlocked.Increment(ref currentChunk) == fileDatas.Count)
+            //    {
+            //        // done
+            //        Interlocked.Exchange(ref AllSent, 1);
+            //        CheckFinalisation();
+            //    }
+            //    else if (Interlocked.CompareExchange(ref currentChunk, 0, 0) < fileDatas.Count)
+            //    {
+            //        var fileData = fileDatas[currentChunk];
+            //        fileData.ReadBytes();
+            //        CalcHash(fileData);
+
+            //        int numUnacked = Interlocked.Increment(ref unAcked);
+
+            //        var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
+            //        envelope.MessageId = StateId;
+            //        services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
+
+            //        PublishStatus(fileData);
+            //        fileData.Release();
+
+            //        if (Interlocked.Add(ref totalOnWire, fileData.count) < WindowSize)
+            //        {
+            //            SendNextChunk();
+            //        }
+            //    }
+            //}
+            //catch (Exception e)
+            //{
+            //    CancelExplicit("Exception Occurred : " + e.ToString());
+            //}
+
+
+            //-------------------------------------------
+
             try
             {
-                if (Interlocked.Increment(ref currentChunk) == fileDatas.Count)
+               
+                while (true)
                 {
-                    // done
-                    Interlocked.Exchange(ref AllSent, 1);
-                    CheckFinalisation();
-                }
-                else if (Interlocked.CompareExchange(ref currentChunk, 0, 0) < fileDatas.Count)
-                {
-                    var fileData = fileDatas[currentChunk];
-                    fileData.ReadBytes();
-                    CalcHash(fileData);
-
-                    int numUnacked = Interlocked.Increment(ref unAcked);
-
-                    var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
-                    envelope.MessageId = StateId;
-                    services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
-
-                    PublishStatus(fileData);
-                    fileData.Release();
-
-                    if (Interlocked.Add(ref totalOnWire, fileData.count) < WindowSize)
+                    lock (mtex)
                     {
-                        SendNextChunk();
+                        var cc = Interlocked.Increment(ref currentChunk);
+                        if (cc == fileDatas.Count)
+                        {
+                            // done
+                            Interlocked.Exchange(ref AllSent, 1);
+                            CheckFinalisation();
+                            break;
+                        }
+                        else if (cc > fileDatas.Count)
+                            break;
+
+                        var fileData = fileDatas[cc];
+                        fileData.ReadBytes();
+                        CalcHash(fileData);
+
+                        int numUnacked = Interlocked.Increment(ref unAcked);
+
+                        var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
+                        envelope.MessageId = StateId;
+                        services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
+
+                        PublishStatus(fileData);
+                        fileData.Release();
+
+                        if (Interlocked.Add(ref totalOnWire, fileData.count) > WindowSize)
+                            break;
                     }
+                  
                 }
+
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 CancelExplicit("Exception Occurred : " + e.ToString());
-
             }
 
         }

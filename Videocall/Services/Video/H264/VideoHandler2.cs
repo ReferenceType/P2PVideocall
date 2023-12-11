@@ -1,5 +1,6 @@
 ﻿using NetworkLibrary;
 using NetworkLibrary.Components;
+using NetworkLibrary.Utils;
 using OpenCvSharp;
 using System;
 using System.Collections.Concurrent;
@@ -7,13 +8,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using System.Windows.Markup;
 using Videocall.Settings;
 using static H264Sharp.Encoder;
 
 namespace Videocall.Services.Video.H264
 {
-    
+
     internal class VideoHandler2
     {
         public Action<byte[], int, bool> OnBytesAvailable;
@@ -118,46 +118,67 @@ namespace Videocall.Services.Video.H264
        
         public bool ObtainCamera()
         {
-            if (capture != null && capture.IsOpened()) return true;
-            obtainingCamera.Reset();
-
-            if(captureThread!=null && captureThread.IsAlive)
+            lock(capLock)
             {
-                captureThread.Join();
+                OnLocalImageAvailable?.Invoke(null);
+                if (capture != null && capture.IsOpened())
+                    return true;
+
+                obtainingCamera.Reset();
+
+                capture = new VideoCapture(camIdx, VideoCaptureAPIs.WINRT);
+
+                capture.Open(camIdx);
+                capture.FrameWidth = frameWidth;
+                capture.FrameHeight = frameHeight;
+                // DebugLogWindow.AppendLog("[Info] Camera Backend: ", capture.GetBackendName());
+
+                transcoder.SetupTranscoder(capture.FrameWidth, capture.FrameHeight, configType);
+                obtainingCamera.Set();
+
+                return capture.IsOpened();
             }
-            capture = new VideoCapture(camIdx, VideoCaptureAPIs.WINRT);
            
-            capture.Open(camIdx);
-            capture.FrameWidth = frameWidth;
-            capture.FrameHeight = frameHeight;
-            obtainingCamera.Set();
-           // DebugLogWindow.AppendLog("[Info] Camera Backend: ", capture.GetBackendName());
-
-            transcoder.SetupTranscoder(capture.FrameWidth,capture.FrameHeight,configType);
-
-            return capture.IsOpened();
         }
-
+        private object l =  new object();
+       // AutoResetEvent stopCap= new AutoResetEvent(false);
         public void CloseCamera()
         {
-            if (capture != null)
+            lock (capLock)
             {
-                try
-                {
-                    capture.Release();
-                } 
-                catch { DebugLogWindow.AppendLog("Error", "Capture Release Failed"); }
-
-                capture = null;
-                Interlocked.Exchange(ref frameQueueCount,0);
-
-                while (MatPool.TryTake(out var mat))
-                    mat.Dispose();
-
                 OnLocalImageAvailable?.Invoke(null);
+                CloseCameraInternal();
+            }
+            
+        }
+        public void CloseCameraInternal()
+        {
+            lock (l)
+            {
+                if (capture != null)
+                {
+                    //  stopCap.Set();
+                    try
+                    {
+
+                        var c = capture;
+                        capture = null;
+                        c.Release();
+                    }
+                    catch { DebugLogWindow.AppendLog("Error", "Capture Release Failed"); }
+
+                    capture = null;
+                    Interlocked.Exchange(ref frameQueueCount, 0);
+
+                    while (MatPool.TryTake(out var mat))
+                        mat.Dispose();
+
+                    OnLocalImageAvailable?.Invoke(null);
+                }
             }
         }
-       
+        private readonly object capLock  = new object();
+        ManualResetEvent beginCapThread = new ManualResetEvent(false);
         public void StartCapturing()
         {
             adjustCamSize = false;
@@ -176,84 +197,111 @@ namespace Videocall.Services.Video.H264
                     return;
                 }
             }
-
+            beginCapThread.Set();
+            if (captureThread != null && captureThread.IsAlive)
+            {
+                return;
+            }
            Stopwatch sw = new Stopwatch();
             captureThread = new Thread(() =>
             {
-                try
+               
+                sw.Start();
+                int remainderTime = 0;
+                while (true)
                 {
-                    sw.Start();
-                    int remainderTime = 0;
-                    while (capture != null && capture.IsOpened())
+                    try
                     {
+                        beginCapThread.WaitOne();
                         if (capture == null || !capture.IsOpened())
-                            return;
-                        if (paused)
                         {
+                            captureRunning = false;
                             Thread.Sleep(100);
                             continue;
                         }
-
-                        if (adjustCamSize)
+                        lock(capLock)
                         {
-                            adjustCamSize = false;
-                            if(capture.FrameWidth != frameWidth || capture.FrameHeight != frameHeight)
+                            captureRunning = true;
+
+                            if (capture == null || !capture.IsOpened())
                             {
-                                capture.Release();
-                                capture.Dispose();
-                                capture = new VideoCapture(camIdx,VideoCaptureAPIs.MSMF);
-                                capture.Open(camIdx);
-                                capture.FrameWidth = frameWidth;
-                                capture.FrameHeight = frameHeight;
-                                frameWidth = capture.FrameWidth;
-                                frameHeight = capture.FrameHeight;
-                                CamSizeFeedbackAvailable?.Invoke(frameWidth, frameHeight);
+                                continue;
                             }
-                           
-                            transcoder.ApplyChanges(fps,TargetBitrate,frameWidth,frameHeight,configType);
-                            frame =  new Mat();
-                            keyFrameRequested = true;
-                        }
-                        Thread.Sleep(1);
-                        if (!capture.Grab())
-                        {
-                            return;
-                        }
-                      
+                            if (paused)
+                            {
+                                Thread.Sleep(100);
+                                continue;
+                            }
 
-                        int sleepTime = CaptureIntervalMs - ((int)sw.ElapsedMilliseconds + remainderTime) ;
-                        if (sleepTime > 0)
-                        {
-                            continue;
+                            if (adjustCamSize)
+                            {
+                                adjustCamSize = false;
+                                if (capture.FrameWidth != frameWidth || capture.FrameHeight != frameHeight)
+                                {
+                                    capture.Release();
+                                    capture.Dispose();
+                                    capture = new VideoCapture(camIdx, VideoCaptureAPIs.MSMF);
+                                    capture.Open(camIdx);
+                                    capture.FrameWidth = frameWidth;
+                                    capture.FrameHeight = frameHeight;
+                                    frameWidth = capture.FrameWidth;
+                                    frameHeight = capture.FrameHeight;
+                                    CamSizeFeedbackAvailable?.Invoke(frameWidth, frameHeight);
+                                }
+
+                                transcoder.ApplyChanges(fps, TargetBitrate, frameWidth, frameHeight, configType);
+                                frame = new Mat();
+                                keyFrameRequested = true;
+                            }
+                            Thread.Sleep(1);
+                            if (!capture.Grab())
+                            {
+                                CaptureFailed("Grab Operation Failed");
+                                Thread.Sleep(100);
+                                continue;
+                            }
+
+
+                            int sleepTime = CaptureIntervalMs - ((int)sw.ElapsedMilliseconds + remainderTime);
+                            if (sleepTime > 0)
+                            {
+                                continue;
+                            }
+
+                            capture.Retrieve(frame);
+                            if (frame.Width == 0 || frame.Height == 0)
+                            {
+                                CaptureFailed("Frame width is 0");
+                                Thread.Sleep(100);
+                                continue;
+                            }
+
+                            remainderTime = -sleepTime;// to positive
+                            sw.Restart();
+
+                            try
+                            {
+                                EncodeFrame(frame);
+                                OnLocalImageAvailable?.Invoke(frame);
+                                capturedFrameCnt++;
+
+                            }
+                            catch (Exception ex) { DebugLogWindow.AppendLog(" Capture encoding failed: ", ex.Message); };
                         }
                        
-                        capture.Retrieve(frame);
-                         if (frame.Width == 0 || frame.Height == 0)
-                            return;
 
-                        remainderTime = -sleepTime;// to positive
-                        sw.Restart();
-
-                        try
-                        {
-                          
-                            //var src = InputArray.Create(frame);
-                            //var @out = OutputArray.Create(frame);
-                            //Cv2.FastNlMeansDenoisingColored(src, @out,10,10,3,5);
-                            EncodeFrame(frame);
-                            OnLocalImageAvailable?.Invoke(frame);
-                            capturedFrameCnt++;
-                         
-                        }
-                        catch (Exception ex) { DebugLogWindow.AppendLog(" Capture encoding failed: ", ex.Message); };
                     }
+                    catch(Exception e) { CaptureFailed(e.Message); }
                 }
-                finally
+
+                void CaptureFailed(string message)
                 {
+                    DebugLogWindow.AppendLog("Camera ERROR", message);
                     captureRunning = false;
-                    CloseCamera();
+                    CloseCameraInternal();
                     OnLocalImageAvailable?.Invoke(null);
                 }
+
 
             });
             captureThread.Start();
