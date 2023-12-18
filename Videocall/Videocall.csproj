@@ -53,10 +53,16 @@
   </PropertyGroup>
   <PropertyGroup>
     <SignManifests>false</SignManifests>
-    <SupportedOSPlatformVersion>8.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
     <None Update="client.pfx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="H264SharpNetCore32.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="H264SharpNetCore64.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Models\Settings\Settings.json">
@@ -157,7 +163,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="H264SharpNetCore64">
-      <HintPath>..\..\..\h264 release\64\H264SharpNetCore64.dll</HintPath>
+      <HintPath>H264SharpNetCore64.dll</HintPath>
     </Reference>
     <Reference Include="NetworkLibrary">
       <HintPath>..\..\NetworkExperiments\Protobuff\bin\Release\net6.0\NetworkLibrary.dll</HintPath>

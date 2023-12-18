@@ -66,8 +66,10 @@ namespace Videocall
         private void InitializeClient()
         {
             string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-          //  var cert = new X509Certificate2(path + "/client.pfx", "greenpass");
-            client = new RelayClient(0);
+            X509Certificate2 cert = null;
+            if (File.Exists(path + "/client.pfx"))
+                 cert = new X509Certificate2(path + "/client.pfx", "greenpass");
+            client = new RelayClient(cert,0);
             // client.MaxUdpPackageSize = 32000;
             //client.EnableJumboUdpRateControl = true;
 
@@ -87,6 +89,9 @@ namespace Videocall
             }
             registeredPeers.Clear();
             OnDisconnected?.Invoke();
+            //client.Dispose();
+            //client = null;
+            //InitializeClient();
         }
 
         private void HandlePeerUnregistered(Guid obj)
@@ -297,9 +302,9 @@ namespace Videocall
             }
             registeredPeers.Clear();
             client.Disconnect();
-            client.Dispose();
-            client = null;
-            InitializeClient();
+            //client.Dispose();
+            //client = null;
+            //InitializeClient();
         }
 
         internal Task<bool> ConnectAsync(string v1, int v2)

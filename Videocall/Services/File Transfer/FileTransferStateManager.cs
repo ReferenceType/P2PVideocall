@@ -90,6 +90,7 @@ namespace Videocall.Services.File_Transfer
             OnTransferCancelled?.Invoke(sendState, c);
             activeStates.TryRemove(sendState.StateId, out _);
             services.FileShare.CleanUp(sendState.StateId);
+            sendState.Cleanup();
         }
 
         private void HandleCompletedSend(SendState sendState, Completion completion)
@@ -97,6 +98,8 @@ namespace Videocall.Services.File_Transfer
             OnTransferComplete?.Invoke(sendState, completion);
             activeStates.TryRemove(sendState.StateId, out _);
             services.FileShare.CleanUp(sendState.StateId);
+            sendState.Cleanup();
+
         }
 
         private void HandleCancelledReceive(ReceiveState receiveState, Completion c)

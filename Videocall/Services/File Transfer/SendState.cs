@@ -33,14 +33,18 @@ namespace Videocall.Services.File_Transfer
 
         private bool forceTCP => services.MessageHandler.FTTransportLayer == "Tcp";
         private ServiceHub services => ServiceHub.Instance;
-
+        private AutoResetEvent signal = new AutoResetEvent(false);
+        int exit = 0;
         public SendState(string[] files, Guid selectedPeer)
         {
             AssociatedPeer = selectedPeer;
             StateId = Guid.NewGuid();
+            Thread thread = new Thread(SendRoutine);
+            thread.Start();
             sw = Stopwatch.StartNew();
             ThreadPool.UnsafeQueueUserWorkItem((s) =>
                 ExtractDirectoryTree(files), null);
+          
         }
       
         private void ExtractDirectoryTree(string[] files)
@@ -98,88 +102,134 @@ namespace Videocall.Services.File_Transfer
         {
             Cancelled?.Invoke(new Completion() {AdditionalInfo=why, Directory = tree.seed });
         }
+
+        private void SendRoutine()
+        {
+            var buffer = new byte[PersistentSettingConfig.Instance.ChunkSize];
+
+            while (true)
+            {
+                signal.WaitOne();
+                if (Interlocked.CompareExchange(ref exit, 0, 0) == 1)
+                    return;
+
+                while (true)
+                {
+                    if (Interlocked.CompareExchange(ref exit, 0, 0) == 1)
+                        return;
+
+                    var cc = Interlocked.Increment(ref currentChunk);
+                    if (cc == fileDatas.Count)
+                    {
+                        // done
+                        Interlocked.Exchange(ref AllSent, 1);
+                        CheckFinalisation();
+                        break;
+                    }
+                    else if (cc > fileDatas.Count)
+                        break;
+
+                    var fileData = fileDatas[cc];
+                    fileData.ReadBytesInto(buffer,0,out int cnt);
+                    CalcHash(fileData);
+
+
+                    var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
+                    envelope.MessageId = StateId;
+                    services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
+
+                    PublishStatus(fileData);
+                    fileData.Release();
+
+                    if (Interlocked.Add(ref totalOnWire, fileData.count) > WindowSize)
+                        break;
+
+
+                }
+
+            }
+        }
         private readonly object mtex = new object();
         private void SendNextChunk()
         {
-            //try
-            //{
-            //    if (Interlocked.Increment(ref currentChunk) == fileDatas.Count)
-            //    {
-            //        // done
-            //        Interlocked.Exchange(ref AllSent, 1);
-            //        CheckFinalisation();
-            //    }
-            //    else if (Interlocked.CompareExchange(ref currentChunk, 0, 0) < fileDatas.Count)
-            //    {
-            //        var fileData = fileDatas[currentChunk];
-            //        fileData.ReadBytes();
-            //        CalcHash(fileData);
-
-            //        int numUnacked = Interlocked.Increment(ref unAcked);
-
-            //        var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
-            //        envelope.MessageId = StateId;
-            //        services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
-
-            //        PublishStatus(fileData);
-            //        fileData.Release();
-
-            //        if (Interlocked.Add(ref totalOnWire, fileData.count) < WindowSize)
-            //        {
-            //            SendNextChunk();
-            //        }
-            //    }
-            //}
-            //catch (Exception e)
-            //{
-            //    CancelExplicit("Exception Occurred : " + e.ToString());
-            //}
-
-
-            //-------------------------------------------
-
+            signal.Set();
+            return;
             try
             {
-               
-                while (true)
+                if (Interlocked.Increment(ref currentChunk) == fileDatas.Count)
                 {
-                    lock (mtex)
-                    {
-                        var cc = Interlocked.Increment(ref currentChunk);
-                        if (cc == fileDatas.Count)
-                        {
-                            // done
-                            Interlocked.Exchange(ref AllSent, 1);
-                            CheckFinalisation();
-                            break;
-                        }
-                        else if (cc > fileDatas.Count)
-                            break;
-
-                        var fileData = fileDatas[cc];
-                        fileData.ReadBytes();
-                        CalcHash(fileData);
-
-                        int numUnacked = Interlocked.Increment(ref unAcked);
-
-                        var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
-                        envelope.MessageId = StateId;
-                        services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
-
-                        PublishStatus(fileData);
-                        fileData.Release();
-
-                        if (Interlocked.Add(ref totalOnWire, fileData.count) > WindowSize)
-                            break;
-                    }
-                  
+                    // done
+                    Interlocked.Exchange(ref AllSent, 1);
+                    CheckFinalisation();
                 }
+                else if (Interlocked.CompareExchange(ref currentChunk, 0, 0) < fileDatas.Count)
+                {
+                    var fileData = fileDatas[currentChunk];
+                    fileData.ReadBytes();
+                    CalcHash(fileData);
 
+                    int numUnacked = Interlocked.Increment(ref unAcked);
+
+                    var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
+                    envelope.MessageId = StateId;
+                    services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
+
+                    PublishStatus(fileData);
+                    fileData.Release();
+
+                    if (Interlocked.Add(ref totalOnWire, fileData.count) < WindowSize)
+                    {
+                        SendNextChunk();
+                    }
+                }
             }
             catch (Exception e)
             {
                 CancelExplicit("Exception Occurred : " + e.ToString());
             }
+
+            //try
+            //{
+
+            //    while (true)
+            //    {
+            //        lock (mtex)
+            //        {
+            //            var cc = Interlocked.Increment(ref currentChunk);
+            //            if (cc == fileDatas.Count)
+            //            {
+            //                // done
+            //                Interlocked.Exchange(ref AllSent, 1);
+            //                CheckFinalisation();
+            //                break;
+            //            }
+            //            else if (cc > fileDatas.Count)
+            //                break;
+
+            //            var fileData = fileDatas[cc];
+            //            fileData.ReadBytes();
+            //            CalcHash(fileData);
+
+            //            int numUnacked = Interlocked.Increment(ref unAcked);
+
+            //            var envelope = fileData.ConvertToMessageEnvelope(out byte[] chunkBuffer);
+            //            envelope.MessageId = StateId;
+            //            services.MessageHandler.SendAsyncMessage(AssociatedPeer, envelope, forceTCP);
+
+            //            PublishStatus(fileData);
+            //            fileData.Release();
+
+            //            if (Interlocked.Add(ref totalOnWire, fileData.count) > WindowSize)
+            //                break;
+            //        }
+
+            //    }
+
+            //}
+            //catch (Exception e)
+            //{
+            //    CancelExplicit("Exception Occurred : " + e.ToString());
+            //}
 
         }
         //private void SendNextChunk2()
@@ -262,6 +312,7 @@ namespace Videocall.Services.File_Transfer
             };
 
             services.MessageHandler.SendAsyncMessage(AssociatedPeer, msg, forceTCP);
+            Cleanup();
         }
 
         private void PublishStatus(FileChunk fileData)
@@ -298,7 +349,15 @@ namespace Videocall.Services.File_Transfer
             response.MessageId = StateId;
             response.KeyValuePairs = new Dictionary<string, string>() { { name, null } };
             services.MessageHandler.SendAsyncMessage(AssociatedPeer, response, forceTCP);
+
+            Interlocked.Exchange(ref exit, 1);
+            signal.Set();
         }
 
+        internal void Cleanup()
+        {
+            Interlocked.Exchange(ref exit, 1);
+            signal.Set();
+        }
     }
 }

@@ -93,6 +93,24 @@ namespace Videocall
 
         }
 
+        internal void ReadBytesInto(byte[] Data, int off, out int cnt)
+        {
+            cnt =0;
+            if (count == 0)
+                return;
+
+            using (var streamData = new FileStream(seed + FilePath, FileMode.Open, FileAccess.Read, System.IO.FileShare.Read))
+            {
+                this.Data = Data;
+                dataBufferOffset = off;
+
+                streamData.Seek(FileStreamStartIdx, SeekOrigin.Begin);
+                streamData.Read(Data, off, count);
+                cnt = count;
+            }
+
+        }
+
         internal void ReadBytesInto(PooledMemoryStream stream)
         {
             if (count == 0)
@@ -146,8 +164,11 @@ namespace Videocall
 
         internal void Release()
         {
-            if (Data != null && canReturnBuffer)
-                BufferPool.ReturnBuffer(Data);
+            //if (canReturnBuffer)
+            //    if (Interlocked.Exchange(ref Data, null) !=null)
+            //    { 
+            //        BufferPool.ReturnBuffer(Data); 
+            //    }
         }
 
         internal void ComputeHash()
@@ -325,9 +346,7 @@ namespace Videocall
                             if (Hashcode != ftMsg.Hashcode)
                             {
                                 error = filePath + " is Corrupted";
-                                Console.WriteLine(error);
                             }
-                            Console.WriteLine(Hashcode);
                         }
                     }
                     else
