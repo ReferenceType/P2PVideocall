@@ -68,17 +68,17 @@ public class MainWindowViewModel : PropertyNotifyBase
     public bool MicroponeChecked { get => microponeChecked; 
         set { microponeChecked = value; HandleMicChecked(value); OnPropertyChanged(); } }
 
-    public ObservableCollection<PeerInfo> PeerInfos { get; set; }
-        = new ObservableCollection<PeerInfo>();
+    public ObservableCollection<VCPeerInfo> PeerInfos { get; set; }
+        = new ObservableCollection<VCPeerInfo>();
 
     public ObservableCollection<ChatDataModel> ChatData { get; set; } 
         = new ObservableCollection<ChatDataModel>();
 
-    private PeerInfo selectedPeer = null;
-    public PeerInfo SelectedItem { get => selectedPeer; 
+    private VCPeerInfo selectedPeer = null;
+    public VCPeerInfo SelectedItem { get => selectedPeer; 
         set { selectedPeer = value; SelectedPeerChanged(value); OnPropertyChanged(); } }
 
-    private void SelectedPeerChanged(PeerInfo value)
+    private void SelectedPeerChanged(VCPeerInfo value)
     {
         if(value == null)
         {

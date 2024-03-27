@@ -39,7 +39,16 @@ namespace Videocall
                 CurrentState = Enum.GetName(typeof(CallState), cs);
             } }
 
-        public string CurrentState { get => currentState1; set { currentState1 = value; OnPropertyChanged(); } }
+        public string CurrentState { 
+            get => currentState1; 
+            set 
+            {
+                if (currentState1 == value)
+                    return;
+                currentState1 = value;
+                OnPropertyChanged();
+            } 
+        }
 
         private static string currentState1 = "Available";
         Guid CallingWith;

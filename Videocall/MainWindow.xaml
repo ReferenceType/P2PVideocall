@@ -17,6 +17,7 @@
         Icon="Resources/favicon2.ico"
         Height="{Binding MainWindowViewModel.WindowHeight, Mode=TwoWay}" MinHeight="670" Width="{Binding MainWindowViewModel.WindowWidth, Mode=TwoWay}" MinWidth="810"
         xmlns:uc="clr-namespace:Videocall.UserControls"
+        xmlns:sm="clr-namespace:ServiceProvider.Services.Audio"
         BorderThickness="1,1,1,1" BorderBrush="#505050">
 
     <Window.Resources>
@@ -390,7 +391,7 @@
                                         <Label Content="H264 Encoding Settings" HorizontalAlignment="Left" Margin="6,10,0,-10" VerticalAlignment="Top" FontWeight="DemiBold"/>
                                         <Rectangle Stroke="DimGray" Width="190" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,10,0,0"/>
                                         <CheckBox IsChecked="{Binding SettingsViewModel.Config.EnableCongestionAvoidance, Mode=TwoWay}"  Content="Enable Congestion Aviodance" Foreground="WhiteSmoke"
-                                                  Margin="5,5,0,-0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                  Margin="5,10,0,-0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
                                                   ToolTip="Activates congestion avoidance algorithms. Reduces the image quality if congestion is detected.&#x0a;If you are having long distance call over Internet its recommended"/>
                                         <CheckBox IsChecked="{Binding SettingsViewModel.Config.ReliableIDR, Mode=TwoWay}"  Content="Reliable IDR" Foreground="WhiteSmoke"
                                                   Margin="5,5,0,-0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -407,13 +408,13 @@
                                             <TextBox Text="{Binding SettingsViewModel.Config.TargetBps}" Margin="-14,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
+                                                    ToolTip="Minimum bitrate of the encoder. Congestion avoidance will not drop below this rate">
+                                            <Label Content="Min Kbps: " Margin="0,0,16,0" HorizontalAlignment="Left" Width="130"/>
+                                            <TextBox Text="{Binding SettingsViewModel.Config.MinBps}" Margin="-14,4,10,0" Width="60" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0"
                                                     ToolTip="Default is recomended. Advanced disables frame skipping for rate control">
-                                            <Label Content="Configuration:" HorizontalAlignment="Left" Margin="2,0,0,0" VerticalAlignment="Top"/>
-                                            <ComboBox HorizontalAlignment="Left" Margin="22,2,0,0" VerticalAlignment="Top" Width="82" IsReadOnly="True" 
-                                                    SelectedItem="{Binding SettingsViewModel.H264Config}" IsSynchronizedWithCurrentItem="True">
-                                                <ComboBoxItem Content="Default" IsSelected="True"/>
-                                                <ComboBoxItem Content="Advanced"/>
-                                            </ComboBox>
+                                            
                                         </StackPanel>
                                     </StackPanel>
                                     <StackPanel>
@@ -497,7 +498,7 @@
                                                      ToolTip="If Native Screen Resolution is bigger than selected,&#x0a;system will scale down to the limit while preserving the aspect ratio">
                                             <Label Content="Screen Capture Resolution Limit:" HorizontalAlignment="Left"
                                                    Margin="2,0,0,0" VerticalAlignment="Top"/>
-                                            <ComboBox HorizontalAlignment="Left" Margin="8,2,0,0" VerticalAlignment="Top" Width="80" IsReadOnly="True" 
+                                            <ComboBox HorizontalAlignment="Left" Margin="8,2,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" 
                                                     SelectedItem="{Binding SettingsViewModel.SCResolution}" IsSynchronizedWithCurrentItem="True">
                                                 <ComboBoxItem Content="_2180p"/>
                                                 <ComboBoxItem Content="_2080p"/>
@@ -511,7 +512,14 @@
                                             </ComboBox>
                                             <!--TestSCChecked-->
                                         </StackPanel>
-
+                                        <Label Content="H264 Configuration:" HorizontalAlignment="Left" Margin="2,0,0,0" VerticalAlignment="Top"/>
+                                        <ComboBox HorizontalAlignment="Left" Margin="8,2,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" 
+                                                SelectedItem="{Binding SettingsViewModel.H264Config}" IsSynchronizedWithCurrentItem="True"
+                                                  ToolTip="Screen capture is slower but not bitrate efficient. 
+                                                           Camera capture is faster but requires more bandwidth">
+                                            <ComboBoxItem Content="ScreenCapture" IsSelected="True"/>
+                                            <ComboBoxItem Content="CameraCapture"/>
+                                        </ComboBox>
                                         <CheckBox IsChecked="{Binding SettingsViewModel.Config.MultiThreadedScreenShare, Mode=TwoWay}"  Content="Enable Parallel Pipeline" Foreground="WhiteSmoke"
                                                   Margin="7,10,0,0" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"
                                                   ToolTip="Enables parallel pipeline for screen capture and encoding. Uses more CPU due to multithreding for better frame rate"/>
@@ -532,13 +540,23 @@
                                 <Grid HorizontalAlignment="Left" Width="200">
                                     <StackPanel>
                                         <Label Content="Audio Settings" HorizontalAlignment="Center"  VerticalAlignment="Top" FontWeight="Bold"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Foreground="WhiteSmoke" Content="Listen Yourself" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" 
+                                                IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
+                                            <!--<CheckBox Foreground="WhiteSmoke" Content="Use WASAPI" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" 
+                                                IsChecked="{Binding SettingsViewModel.Config.UseWasapi}"/>-->
+                                        </StackPanel>
 
-                                        <CheckBox Foreground="WhiteSmoke" Content="Listen Yourself" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" 
-                                            IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
-                                        <!--<CheckBox Foreground="WhiteSmoke" Content="SendDoubleAudio" HorizontalAlignment="Left" Margin="5,10,0,0" VerticalAlignment="Top" 
-                                            IsChecked="{Binding SettingsViewModel.SendDoubleAudiocheck}"/>-->
+                                        <StackPanel Orientation="Vertical" Margin="0,0,0,0">
+                                            <Label Content="Output Device: "></Label>
+                                            <ComboBox Width="185" HorizontalAlignment="Left" Margin="5,0,0,0"
+                                                      ItemsSource="{Binding Path= SettingsViewModel.InputDevices}"
+                                                      DisplayMemberPath="Name"
+                                                      SelectedItem="{Binding Path= SettingsViewModel.SelectedDevice}"></ComboBox>
 
-                                        <StackPanel Margin="0,10,0,0">
+                                        </StackPanel>
+
+                                        <StackPanel Margin="0,0,0,0">
                                             <Label Content="Volume" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
                                             <Slider HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="185" 
                                                     AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3"  Maximum="3"
@@ -553,7 +571,7 @@
                                                 ToolTip="Jitter buffer duration represents maximum allowed time to wait for a missing audio sample in miliseconds"/>
 
                                         <!--<TextBlock HorizontalAlignment="Center" Margin="0,10,0,0" TextWrapping="Wrap" Text="Audio Statistics"  FontWeight="Bold" VerticalAlignment="Top"/>-->
-                                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <TextBlock HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap" Text="Buffer Level" VerticalAlignment="Top"/>
                                             <ProgressBar HorizontalAlignment="Left" Height="10" Margin="20,4,0,0" VerticalAlignment="Top" Width="100" Background="Black"
                                                     Value="{Binding SettingsViewModel.BufferedDurationPercentage}"
@@ -561,11 +579,11 @@
 
                                         </StackPanel>
                                        
-                                        <TextBlock HorizontalAlignment="Left" Margin="5,5,0,0" TextWrapping="Wrap" 
+                                        <TextBlock HorizontalAlignment="Left" Margin="5,0,0,0" TextWrapping="Wrap" 
                                                 Text="{Binding SettingsViewModel.TotalNumLostPackages}" VerticalAlignment="Top"/>
                                         
-                                        <StackPanel Margin="0,17,0,0">
-                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <StackPanel Margin="0,15,0,0">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
                                                 <CheckBox Foreground="WhiteSmoke" Content="Enable Graph" HorizontalAlignment="Left" Margin="5,0,0,1" VerticalAlignment="Bottom" 
                                                 IsChecked="{Binding SettingsViewModel.EnableSoundVisualPublish}"/>
                                                 <StackPanel Margin="20,0,0,0">
@@ -580,7 +598,7 @@
                                         </StackPanel>
                                         
                                     </StackPanel>
-                                    <Rectangle HorizontalAlignment="Left" Height="125"  Stroke="DimGray" VerticalAlignment="Bottom" Width="200" RadiusX="4.167" RadiusY="4.167"/>
+                                    <Rectangle HorizontalAlignment="Left" Height="120"  Stroke="DimGray" VerticalAlignment="Bottom" Width="200" RadiusX="4.167" RadiusY="4.167"/>
 
 
 

@@ -7,7 +7,9 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Media;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -15,7 +17,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using Videocall.Services.Latency;
 using Videocall.Services.ScreenShare;
-using Videocall.Services.Video.H264;
+using Videocall.Services.Video;
 using Videocall.Settings;
 
 namespace Videocall
@@ -44,6 +46,7 @@ namespace Videocall
         public MainWindow()
         {
             Environment.SetEnvironmentVariable("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0");
+            OpenCvSharp.Cv2.SetNumThreads(1);
 
             MiniLogger.AllLog += (string s) => DebugLogWindow.AppendLog("any", s);
             MiniLogger.AllLog += Console.WriteLine;
@@ -55,6 +58,8 @@ namespace Videocall
             MessageHandler = hub.MessageHandler;
             LatencyPublisher = hub.LatencyPublisher;
             ScreenShareHandler = hub.ScreenShareHandler;
+
+            hub.LogAvailable += (type, log) => DebugLogWindow.AppendLog(type, log);
 
             MainWindowViewModel = new MainWindowViewModel();
             MainWindowViewModel.SrollToEndChatWindow += () =>
@@ -86,6 +91,7 @@ namespace Videocall
             ChatHideButton.Visibility = Visibility.Hidden;
             PeersHideButton.Visibility = Visibility.Hidden;
             CamGridColumn.Width = new GridLength(0, GridUnitType.Star);
+           
         }
 
 
@@ -126,6 +132,7 @@ namespace Videocall
         private void Current_Exit(object sender, ExitEventArgs e)
         {
             VideoHandler.CloseCamera();
+            AudioHandler.Dispose();
 
         }
 
@@ -139,8 +146,29 @@ namespace Videocall
                 File.AppendAllText(workingDir + "/CrashDump.txt", ex);
                
             }
+            ManualResetEvent a = new ManualResetEvent(false);
+            Task.Run(() =>
+            {
+                try
+                {
+                    var t1 = Task.Run(() => MessageHandler.Disconnect());
+                    var t2 = Task.Run(() => AudioHandler.Dispose());
+                    var t3 = Task.Run(() => VideoHandler.Dispose());
+                    var t4 = Task.Run(() => ScreenShareHandler.StopCapture());
+                    Task.WaitAll(t1, t2, t3, t4);
+
+                }
+                finally
+                {
+                    a.Set();
+                }
+
+            });
+
+            a.WaitOne(1000);
             Application.Current.Shutdown();
-            Process.GetCurrentProcess().WaitForExit(2000);
+
+            a.WaitOne(2000);
             Process.GetCurrentProcess().Kill();
             // Environment.Exit(0);
 
@@ -155,13 +183,29 @@ namespace Videocall
                 string workingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                 File.AppendAllText(workingDir + "/CrashDump.txt", ex);
             }
-            
-            MessageHandler.Disconnect();
-            VideoHandler.CloseCamera();
-            ScreenShareHandler.StopCapture();
+            ManualResetEvent a = new ManualResetEvent(false);
+            Task.Run(() =>
+            {
+                try
+                {
+                    var t1 = Task.Run(() => MessageHandler.Disconnect());
+                    var t2 = Task.Run(() => AudioHandler.Dispose());
+                    var t3 = Task.Run(() => VideoHandler.Dispose());
+                    var t4 = Task.Run(() => ScreenShareHandler.StopCapture());
+                    Task.WaitAll(t1, t2, t3, t4);
 
+                }
+                finally
+                {
+                    a.Set();
+                }
+
+            });
+
+            a.WaitOne(1000);
             Application.Current.Shutdown();
-            Process.GetCurrentProcess().WaitForExit(2000);
+
+            a.WaitOne(2000);
             Process.GetCurrentProcess().Kill();
         }
 
@@ -170,17 +214,30 @@ namespace Videocall
         #region Custom window Code behind
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            MessageHandler.Disconnect();
-            VideoHandler.CloseCamera();
-            ScreenShareHandler.StopCapture();
-            //Environment.Exit(0);
 
-            //cameraWindow.Close();
-            //this.Close();
+            ManualResetEvent a = new ManualResetEvent(false);
+            Task.Run(() =>
+            {
+                try
+                {
+                    var t1 = Task.Run(() => MessageHandler.Disconnect());
+                    var t2 = Task.Run(() => AudioHandler.Dispose());
+                    var t3 = Task.Run(() => VideoHandler.Dispose());
+                    var t4 = Task.Run(() => ScreenShareHandler.StopCapture());
+                    Task.WaitAll(t1, t2, t3, t4);
+                   
+                }
+                finally
+                {
+                    a.Set();
+                }
 
+            });
 
+            a.WaitOne(1000);
             Application.Current.Shutdown();
-            Process.GetCurrentProcess().WaitForExit(2000);
+
+            a.WaitOne(2000);
             Process.GetCurrentProcess().Kill();
         }
         protected override void OnClosed(EventArgs e)
@@ -250,7 +307,10 @@ namespace Videocall
         {
             if (!DebugLogWindow.Instance.IsVisible)
             {
+
                 DebugLogWindow.Instance.Show();
+                DebugLogWindow.Instance.Activate();
+                DebugLogWindow.Instance.Topmost = true;
             }
             else
                 DebugLogWindow.Instance.Hide();
@@ -369,7 +429,6 @@ namespace Videocall
                     PeersHideButton.Visibility = Visibility.Hidden;
                     ChatGridColumn.MinWidth = 280;
                     PeersGridColumn.MinWidth = 200;
-                    ScreenShareHandler.StopCapture();
                 }
             });
         }

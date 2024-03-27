@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Videocall.Services.File_Transfer;
 
 namespace Videocall
 {
@@ -21,7 +22,8 @@ namespace Videocall
         private bool autoReconnect = true;
         private bool autoHolepunch = true;
         private int targetBps = 1500;
-        private int sctargetBps = 3000;
+        private int minBps = 300;
+        private int sctargetBps = 2000;
         private static bool dontInvoke = true;
         private int screenId =0;
         private int gpuId = 0;
@@ -51,7 +53,21 @@ namespace Videocall
         public int Port { get => port; set { port = value; OnPropertyChanged(); } }
 
         public string Name { get => name; set { name = value; OnPropertyChanged(); } }
-        public int ChunkSize { get => chunkSize; set { chunkSize = value; OnPropertyChanged(); } }
+        public int FTWindowSize { get => fTWindowSize; 
+            set 
+            {
+                fTWindowSize = value;
+                FileTransferStateManager.WindowsSize = fTWindowSize;
+            }
+        }
+
+        public int ChunkSize { get => chunkSize; 
+            set 
+            { 
+                chunkSize = value; OnPropertyChanged();
+                FileTransferStateManager.ChunkSize = chunkSize;
+            }
+        }
         public bool AutoReconnect { get => autoReconnect; set { autoReconnect = value; OnPropertyChanged(); } }
         public bool AutoHolepunch { get => autoHolepunch; set { autoHolepunch = value; OnPropertyChanged(); } }
         public int CameraIndex { get => cameraIndex; set {
@@ -63,16 +79,28 @@ namespace Videocall
         public int ScreenId { get => screenId; set { screenId = value; OnPropertyChanged(); } }
         public int GpuId { get => gpuId; set { gpuId = value; OnPropertyChanged(); } }
         public int TargetBps { get => targetBps; set { targetBps = value; OnPropertyChanged(); } }
+        public int MinBps { get => minBps; set { minBps = value; OnPropertyChanged(); } }
         public int IdrInterval { get => idrInterval; set {idrInterval = value; OnPropertyChanged();  } }
         public int SCTargetBps { get => sctargetBps; set { sctargetBps = value; OnPropertyChanged(); } }
         public int SCTargetFps { get => sCTargetFps; set { sCTargetFps = value; OnPropertyChanged(); } }
         public bool MultiThreadedScreenShare { get => multiThreadedScreenShare; set {
                 multiThreadedScreenShare = value;
+                ServiceHub.Instance.ScreenShareHandler.EnableParalelisation = multiThreadedScreenShare;
                 OnPropertyChanged();
             } }
-
+            public bool UseWasapi
+        {
+            get => useWasapi;
+            set
+            {
+                useWasapi = value;
+                ServiceHub.Instance.AudioHandler.useWasapi = value;
+                OnPropertyChanged();
+            }
+        }
         public bool EnableCongestionAvoidance { get => enableCongestionAvoidance; 
             set { enableCongestionAvoidance = value; 
+                ServiceHub.Instance.VideoHandler.EnableCongestionAvoidance = enableCongestionAvoidance;
                 OnPropertyChanged(); 
             } }
 
@@ -85,11 +113,12 @@ namespace Videocall
 
         public bool AutoAcceptCalls { get => autoAcceptCalls; set { autoAcceptCalls = value; OnPropertyChanged(); } }
 
-        public int FTWindowSize { get => fTWindowSize; set => fTWindowSize = value; }
 
         private bool autoAcceptCalls = false;
         private bool reliableIDR = true;
         private bool enableCongestionAvoidance = true;
+        private bool useWasapi = false;
+
         public static void SerializeToJsonAndSave()
         {
             string jsonString = JsonSerializer.Serialize(Instance);

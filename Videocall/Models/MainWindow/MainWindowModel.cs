@@ -1,4 +1,5 @@
-﻿using NetworkLibrary;
+﻿using H264Sharp;
+using NetworkLibrary;
 using NetworkLibrary.Components;
 using NetworkLibrary.P2P.Generic;
 using NetworkLibrary.Utils;
@@ -10,6 +11,7 @@ using ProtoBuf.Meta;
 using ProtoBuf.Serializers;
 using Protobuff;
 using Protobuff.P2P;
+using ServiceProvider.Services.Video;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -19,6 +21,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Media;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -26,6 +29,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Ink;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
@@ -36,7 +42,6 @@ using Videocall.Models;
 using Videocall.Services.File_Transfer;
 using Videocall.Services.Latency;
 using Videocall.Settings;
-using PeerInfo = Videocall.PeerInfo;
 
 internal class MainWindowModel
 {
@@ -46,7 +51,9 @@ internal class MainWindowModel
     private ConcurrentDictionary<Guid, string> peers = new ConcurrentDictionary<Guid, string>();
     private FileTransferStateManager ftsm = new FileTransferStateManager();
     int busy = 0;
-
+    private SoundPlayer hangupSound = new SoundPlayer(@"hangup2.wav");
+    private SoundPlayer receivingCallSound = new SoundPlayer(@"ringtone.wav");
+    private SoundPlayer callingSound = new SoundPlayer(@"marimba.wav");
     public MainWindowModel(MainWindowViewModel mainWindowViewModel, ServiceHub services)
     {
         this.mainWindowViewModel = mainWindowViewModel;
@@ -57,6 +64,8 @@ internal class MainWindowModel
         services.VideoHandler.OnBytesAvailableAction += HandleCameraEncodedBytes2;
         services.VideoHandler.OnRemoteImageAvailable += HandleNetworkFrame;
         services.VideoHandler.KeyFrameRequested += RequestKeyFrame;
+        services.VideoHandler.LtrRecoveryRequest += RequestLtrRecover;
+        services.VideoHandler.MarkingFeedback += MarkingFeedback;
 
         services.MessageHandler.OnMessageAvailable += HandleMessage;
         services.MessageHandler.OnPeerRegistered += HandlePeerRegistered;
@@ -70,6 +79,7 @@ internal class MainWindowModel
         HandleScreenshare();
 
         SetupFileTransferControls();
+        PreventSleep();
     }
 
     
@@ -89,49 +99,110 @@ internal class MainWindowModel
         }
 
     }
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
+    [FlagsAttribute]
+    public enum EXECUTION_STATE : uint
+    {
+        ES_AWAYMODE_REQUIRED = 0x00000040,
+        ES_CONTINUOUS = 0x80000000,
+        ES_DISPLAY_REQUIRED = 0x00000002,
+        ES_SYSTEM_REQUIRED = 0x00000001
+        // Legacy flag, should not be used.
+        // ES_USER_PRESENT = 0x00000004
+    }
+    private void PreventSleep()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                await Task.Delay(30000);
+                var currentstate = CallStateManager.GetState();
+                if (currentstate == CallStateManager.CallState.OnCall)
+                {
+                    DispatcherRun(() => SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_AWAYMODE_REQUIRED |  EXECUTION_STATE.ES_DISPLAY_REQUIRED | EXECUTION_STATE.ES_SYSTEM_REQUIRED));
+                }
+                else
+                {
+                    DispatcherRun(() => SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS));
+                }
+            }
 
+        });
+    }
     private void CallStateChanged(object sender, PropertyChangedEventArgs e)
     {
-        var currentstate = CallStateManager.GetState();
 
-        if (currentstate == CallStateManager.CallState.OnCall ||
-            currentstate == CallStateManager.CallState.Calling || 
-            currentstate == CallStateManager.CallState.ReceivingCall)
+        var currState = CallStateManager.GetState();
+
+        //if (currState == CallStateManager.CallState.ReceivingCall)
+        //    Task.Delay(100).ContinueWith((t)=>receivingCallSound.PlayLooping());
+        //else
+        //    receivingCallSound.Stop();
+
+        //if (currState == CallStateManager.CallState.Calling)
+        //    callingSound.PlayLooping();
+        //else
+        //    callingSound.Stop();
+        Task.Run(() =>
         {
-            if (mainWindowViewModel.MicroponeChecked && currentstate == CallStateManager.CallState.OnCall)
-                services.AudioHandler.StartMic();
-            
-            DispatcherRun(() =>
+            if (currState == CallStateManager.CallState.OnCall)
             {
-                services.VideoHandler.FlushBuffers();
-                HandleCamActivated(mainWindowViewModel.CameraChecked);
+                services.ResetBuffers();
+                services.AudioHandler.CheckInit();
+                services.AudioHandler.StartSpeakers();
+                if (mainWindowViewModel.MicroponeChecked && currState == CallStateManager.CallState.OnCall)
+                {
+                    Task.Delay(50).ContinueWith((t) =>
+                    {
+                        services.AudioHandler.StartMic();
+                    });
+                }
 
-                mainWindowViewModel.EndCallVisibility = true;
-                if (mainWindowViewModel.WindowWidth <= 1000)
-                    mainWindowViewModel.WindowWidth = 1000;
-            });
-        }
-        else
-        {
-            HandleCamActivated(false);
-            services.AudioHandler.StopMic();
-            DispatcherRun(() =>
+                DispatcherRun(() =>
+                {
+                    HandleCamActivated(mainWindowViewModel.CameraChecked);
+
+                    mainWindowViewModel.EndCallVisibility = true;
+                    if (mainWindowViewModel.WindowWidth <= 1000)
+                        mainWindowViewModel.WindowWidth = 1000;
+                });
+
+
+            }
+            if (currState == CallStateManager.CallState.Available)
             {
-                services.VideoHandler.FlushBuffers();
-                mainWindowViewModel.EndCallVisibility = false;
-                mainWindowViewModel.SecondaryCanvasSource = null;
-                mainWindowViewModel.PrimaryCanvasSource = null;
+               
+                services.ResetBuffers();
+                services.VideoHandler.HardReset();
 
-            });
+                services.AudioHandler.StopSpreakers();
+                services.AudioHandler.StopMic();
+               // hangupSound.Play();
 
-            DispatcherRun(async () => {
-                await Task.Delay(500);
-                mainWindowViewModel.SecondaryCanvasSource = null;
-                mainWindowViewModel.PrimaryCanvasSource = null;
-            });
+                HandleCamActivated(false);
+                DispatcherRun(() =>
+                {
+                    services.VideoHandler.FlushBuffers();
+                    mainWindowViewModel.EndCallVisibility = false;
+                    mainWindowViewModel.ShareScreenChecked = false;
+                    mainWindowViewModel.SecondaryCanvasSource = null;
+                    mainWindowViewModel.PrimaryCanvasSource = null;
+                });
 
-        }
-    }
+                DispatcherRun(async () => {
+                    await Task.Delay(500);
+                    mainWindowViewModel.SecondaryCanvasSource = null;
+                    mainWindowViewModel.PrimaryCanvasSource = null;
+                });
+            }
+        });
+      
+
+
+       
+}
 
     #region Message handling
     private void HandleMessage(MessageEnvelope message)
@@ -170,6 +241,14 @@ internal class MainWindowModel
             case MessageHeaders.RequestKeyFrame:
                 services.VideoHandler.ForceKeyFrame();
                 break;
+
+            case MessageHeaders.LtrRecoveryVH:
+                DebugLogWindow.AppendLog("Info", "Ltr Recovery Req Receieved");
+                services.VideoHandler.HandleLtrRecovery(message.Payload,message.PayloadOffset,message.PayloadCount);
+                break;
+            case MessageHeaders.MarkikngFeedbackVH:
+                services.VideoHandler.HandleMarkingFeedback(message.Payload, message.PayloadOffset, message.PayloadCount);
+                break;
             default:
                 ftsm.HandleMessage(message);
                 break;
@@ -202,39 +281,44 @@ internal class MainWindowModel
         {
             try
             {
-                while (services.MessageHandler.registeredPeers.ContainsKey(peerId))
+                if (services.MessageHandler.registeredPeers.ContainsKey(peerId))
                 {
                     MessageEnvelope env = new MessageEnvelope();
                     env.Header = MessageHeaders.Identify;
-                    var response = await services.MessageHandler.SendRequestAndWaitResponse(peerId, env, 10000,RudpChannel.Realtime);
-                    if (response.Header != MessageEnvelope.RequestTimeout)
-                    {
-                        if (response.KeyValuePairs == null)
-                        {
-                            services.MessageHandler.registeredPeers.TryRemove(peerId,out _);
-                            return;
-                        }
+                    var response = await services.MessageHandler.SendRequestAndWaitResponse(peerId, env, 10000, RudpChannel.Realtime);
 
-                        string name = response.KeyValuePairs[peerId.ToString()];
-                        peers.TryAdd(peerId, name);
-                        var info = services.MessageHandler.GetPeerInfo(peerId);
-                        info.IP = IPAddress.Parse(info.IP).MapToIPv4().ToString();
-                        DispatcherRun(() =>
-                        {
-                            var peerinfo = new Videocall.PeerInfo(name, info.IP, info.Port, peerId);
-                            mainWindowViewModel.PeerInfos.Add(peerinfo);
-                            MainWindowEventAggregator.Instance.InvokePeerRegisteredEvent(peerinfo);
-                            if (mainWindowViewModel.SelectedItem == null)
-                                mainWindowViewModel.SelectedItem = mainWindowViewModel.PeerInfos.FirstOrDefault();
-                            DebugLogWindow.AppendLog("Info", "Registered client ");
-
-                        });
-                        break;
-                    }
-                    else
+                    if (response.Header == MessageEnvelope.RequestTimeout)
                     {
                         DebugLogWindow.AppendLog("Error", "Registery timeout");
+                        return;
                     }
+
+                    if(response.KeyValuePairs == null || !response.KeyValuePairs.ContainsKey("Name"))
+                    {
+                        DebugLogWindow.AppendLog("Error", "Incompatible Peer");
+                        return ;
+                    }
+
+                    string name = response.KeyValuePairs["Name"];
+                    peers.TryAdd(peerId, name);
+
+                    var info = services.MessageHandler.GetPeerInfo(peerId);
+                    info.IP = IPAddress.Parse(info.IP).MapToIPv4().ToString();
+
+                    DispatcherRun(() =>
+                    {
+                        var peerinfo = new VCPeerInfo(name, info.IP, info.Port, peerId);
+                        mainWindowViewModel.PeerInfos.Add(peerinfo);
+
+                        MainWindowEventAggregator.Instance.InvokePeerRegisteredEvent(peerinfo);
+
+                        if (mainWindowViewModel.SelectedItem == null)
+                            mainWindowViewModel.SelectedItem = mainWindowViewModel.PeerInfos.FirstOrDefault();
+
+                        DebugLogWindow.AppendLog("Info", "Registered client ");
+
+                    });
+
                 }
 
             }
@@ -257,7 +341,7 @@ internal class MainWindowModel
             response.Header = "ID";
             response.KeyValuePairs = new Dictionary<string, string>
                 {
-                    { services.MessageHandler.SessionId.ToString(), PersistentSettingConfig.Instance.Name }
+                    { "Name", PersistentSettingConfig.Instance.Name }
                 };
             services.MessageHandler.SendAsyncMessage(message.From, response);
         });
@@ -412,12 +496,15 @@ internal class MainWindowModel
         if (camChecked)
         {
             if(currentstate == CallStateManager.CallState.Calling)
-                Task.Run(()=>services.VideoHandler.ObtainCamera());
+               Task.Run(()=>services.VideoHandler.ObtainCamera());
             if (currentstate == CallStateManager.CallState.OnCall)
             {
                 // call receiver shouldt acticate cam on call request, only when call is completed.
-                services.VideoHandler.ObtainCamera();
-                services.VideoHandler.StartCapturing();
+
+                Task.Run(() => services.VideoHandler.ObtainCamera()).ContinueWith((t)=>
+                 services.VideoHandler.StartCapturing());
+               
+               
             }
         }
         else
@@ -430,13 +517,13 @@ internal class MainWindowModel
             }
 
             DispatcherRun(async () => { await Task.Delay(500); mainWindowViewModel.SecondaryCanvasSource = null; });
-            services.VideoHandler.CloseCamera();
+            services.VideoHandler.CloseCamera() ;
         }
 
 
     }
     int secondaryCanvasBusy = 0;
-    private void HandleCameraImage(Mat image)
+    private void HandleCameraImage(ImageReference image)
     {
         if(Interlocked.CompareExchange(ref secondaryCanvasBusy, 1, 0) == 1)
         {
@@ -454,20 +541,26 @@ internal class MainWindowModel
                   || image.Width != mainWindowViewModel.SecondaryCanvasSource.Width
                   || image.Height != mainWindowViewModel.SecondaryCanvasSource.Height)
                 {
-                    mainWindowViewModel.SecondaryCanvasSource = image.ToBitmapSource();
+                    mainWindowViewModel.SecondaryCanvasSource = new WriteableBitmap(image.Width,
+                                                                                  image.Height,
+                                                                                  96,
+                                                                                  96,
+                                                                                  PixelFormats.Bgr24,
+                                                                                  null);
                 }
                 else
                 {
                     var dst = (WriteableBitmap)mainWindowViewModel.SecondaryCanvasSource;
                     dst.Lock();
-
                     int width = image.Width;
                     int height = image.Height;
-                    int stride = (int)image.Step();
-                    long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
+                    int step = image.Stride;
+                    int range = width * height * 3;
 
-                    dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, stride);
+                    dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
+
                     dst.Unlock();
+                    services.VideoHandler.ReturnImage(image);
                 }
             }
             finally
@@ -498,9 +591,14 @@ internal class MainWindowModel
         }
       
     }
-
+    int cc = 0;
     private void HandleCameraEncodedBytes2(Action<PooledMemoryStream> action, int lenght, bool isKeyFrame)
     {
+        //if (cc++ > 15&& !isKeyFrame)
+        //{
+        //    cc = 0;
+        //    return;
+        //}
         if (CallStateManager.GetState() == CallStateManager.CallState.OnCall &&
           mainWindowViewModel.CameraChecked)
         {
@@ -511,12 +609,15 @@ internal class MainWindowModel
             env.MessageId = Guid.NewGuid();
             services.VideoHandler.ImageDispatched(env.MessageId, env.TimeStamp);
 
-            bool isReliable = isKeyFrame && SettingsViewModel.Instance.Config.ReliableIDR;
+            bool isReliable = isKeyFrame /*&& SettingsViewModel.Instance.Config.ReliableIDR*/;
             services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, isReliable, action);
         }
     }
     private void HandleIncomingImage(MessageEnvelope message)
     {
+        if (CallStateManager.GetState() != CallStateManager.CallState.OnCall)
+            return;
+
         var img = message.Payload;
         services.VideoHandler.HandleIncomingImage(message.TimeStamp, message.Payload,message.PayloadOffset,message.PayloadCount);
 
@@ -530,7 +631,9 @@ internal class MainWindowModel
         // down there HandleNetworkFrame(Mat)
     }
     int primaryCanvasBusy = 0;
-    private void HandleNetworkFrame(Mat image)
+    
+
+    private void HandleNetworkFrame(ImageReference image)
     {
         if(Interlocked.CompareExchange(ref primaryCanvasBusy, 1, 0) == 1)
         {
@@ -540,27 +643,43 @@ internal class MainWindowModel
         {
             try
             {
+
                 if (image == null)
-                    mainWindowViewModel.PrimaryCanvasSource = null;
-                else if (mainWindowViewModel.PrimaryCanvasSource == null
-                || image.Width != mainWindowViewModel.PrimaryCanvasSource.Width
-                || image.Height != mainWindowViewModel.PrimaryCanvasSource.Height)
                 {
-                    mainWindowViewModel.PrimaryCanvasSource = image.ToBitmapSource();
+                    mainWindowViewModel.PrimaryCanvasSource = null;
+                    return;
+
                 }
-                else
+                else if (image.Width == 0 || image.Height == 0) 
+                {
+                    return; 
+                } 
+                else if (mainWindowViewModel.PrimaryCanvasSource == null
+                        || image.Width != mainWindowViewModel.PrimaryCanvasSource.Width
+                        || image.Height != mainWindowViewModel.PrimaryCanvasSource.Height)
+                {
+
+                    mainWindowViewModel.PrimaryCanvasSource = new WriteableBitmap(image.Width,
+                                                                                  image.Height,
+                                                                                  96,
+                                                                                  96,
+                                                                                  PixelFormats.Bgr24,
+                                                                                  null); 
+                }
+                
                 {
                     var dst = (WriteableBitmap)mainWindowViewModel.PrimaryCanvasSource;
                     dst.Lock();
                     int width = image.Width;
                     int height = image.Height;
-                    int step = (int)image.Step();
-                    long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
+                    int step = image.Stride;
+                    int range = width * height * 3;
 
-                    dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
+                    dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
+
                     dst.Unlock();
-                    // image.Dispose();
-                    services.VideoHandler.MatPool.Add(image);
+                    services.VideoHandler.ReturnImage(image);
+                   
                 }
             }
             finally
@@ -574,8 +693,21 @@ internal class MainWindowModel
     }
     private void RequestKeyFrame()
     {
-        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), new MessageEnvelope() { Header = MessageHeaders.RequestKeyFrame}, reliable: false);
+        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), new MessageEnvelope() { Header = MessageHeaders.RequestKeyFrame}, reliable: true);
 
+    }
+    private void RequestLtrRecover(byte[] arg1, int arg2, int arg3)
+    {
+        var msg = new MessageEnvelope() { Header = MessageHeaders.LtrRecoveryVH };
+        msg.SetPayload(arg1, arg2, arg3);
+        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), msg, reliable: true);
+
+    }
+    private void MarkingFeedback(byte[] arg1, int arg2, int arg3)
+    {
+        var msg = new MessageEnvelope() { Header = MessageHeaders.MarkikngFeedbackVH };
+        msg.SetPayload(arg1, arg2, arg3);
+        services.MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), msg, reliable: true);
     }
     private void HandleVideoAck(MessageEnvelope message)
     {
@@ -625,8 +757,8 @@ internal class MainWindowModel
             DataLenght = packedSample.PayloadCount
             
         };
-       
-        services.AudioHandler.HandleRemoteAudioSample(sample);
+       if(CallStateManager.GetState() == CallStateManager.CallState.OnCall)
+            services.AudioHandler.HandleRemoteAudioSample(sample);
 
     }
     internal void HandleMicChecked(bool value)
@@ -646,20 +778,20 @@ internal class MainWindowModel
 
     #region Call Handling
 
-    internal async void HandleCallUserRequest(PeerInfo SelectedItem)
+    internal async void HandleCallUserRequest(VCPeerInfo SelectedItem)
     {
         if (!CallStateManager.CanSendCall()) return;
         try
         {
-            var info = SelectedItem;
-            if (info != null)
+            var selectedPeerInfo = SelectedItem;
+            if (selectedPeerInfo != null)
             {
                 CallStateManager.Calling();
                 // todo MY INFO NOT SELECTED
-                var nfo = new PeerInfo(PersistentSettingConfig.Instance.Name,null,0, Guid.Empty); 
-                var response = await services.MessageHandler.SendRequestAndWaitResponse(info.Guid, nfo, MessageHeaders.Call, 10000);
+                var myInfo = new VCPeerInfo(PersistentSettingConfig.Instance.Name,null,0, services.MessageHandler.SessionId); 
+                var response = await services.MessageHandler.SendRequestAndWaitResponse(selectedPeerInfo.Guid, myInfo, MessageHeaders.Call, 10000);
                 if (response.Header != MessageEnvelope.RequestTimeout)
-                    HandleCallResponse(response, info);
+                    HandleCallResponse(response, selectedPeerInfo);
                 else
                 {
                     CallStateManager.CallRejected();
@@ -684,7 +816,7 @@ internal class MainWindowModel
         {
             App.ShowMainWindow();
 
-            var info = services.MessageHandler.Serializer.UnpackEnvelopedMessage<PeerInfo>(message);
+            var callerInfo = services.MessageHandler.Serializer.UnpackEnvelopedMessage<VCPeerInfo>(message);
             //var t1 = AsyncToastNotificationHandler.ShowCallNotification(info.Name);
             Task<string> t2;
             if (SettingsViewModel.Instance.Config.AutoAcceptCalls)
@@ -694,14 +826,14 @@ internal class MainWindowModel
             }
             else
             {
-                t2 = AlertWindow.ShowCallDialog(info.Name);
+                t2 = AlertWindow.ShowCallDialog(callerInfo.Name);
             }
 
             var res = await Task.WhenAny(/*t1,*/ t2);
             var result = res.Result;
             if (result == AsyncToastNotificationHandler.NotificationTimeout)
             {
-                AsyncToastNotificationHandler.ShowInfoNotification(info.Name + " Called you.");
+                AsyncToastNotificationHandler.ShowInfoNotification(callerInfo.Name + " Called you.");
             }
 
             message.Header = "CallResponse";
@@ -709,14 +841,17 @@ internal class MainWindowModel
             {
                 { "Result", result }
             };
+
             AlertWindow.CancelDialog();
             DebugLogWindow.AppendLog("Info", "Sending Result: " + result);
 
-            services.MessageHandler.SendAsyncMessage(message.From, message);
+            services.MessageHandler.SendAsyncMessage(callerInfo.Guid, message);
             DebugLogWindow.AppendLog("Info", "Result sent!");
+
             var id = services.MessageHandler.SessionId;
+
             if (result == AsyncToastNotificationHandler.CallAccepted)
-                CallStateManager.RegisterCall(message.From);
+                CallStateManager.RegisterCall(callerInfo.Guid);
             else
                 CallStateManager.EndCall();
         }
@@ -727,7 +862,7 @@ internal class MainWindowModel
 
 
     }
-    private void HandleCallResponse(MessageEnvelope message, PeerInfo info)
+    private void HandleCallResponse(MessageEnvelope message, VCPeerInfo info)
     {
         DebugLogWindow.AppendLog("You", "Call Response Received");
 
@@ -755,11 +890,11 @@ internal class MainWindowModel
 
         if (CallStateManager.GetState() == CallStateManager.CallState.OnCall)
         {
-            CallStateManager.EndCall();
-
             MessageEnvelope msg = new MessageEnvelope();
             msg.Header = MessageHeaders.EndCall;
             services.MessageHandler.SendAsyncMessage(CallStateManager.GetCallerId(), msg);
+
+            CallStateManager.EndCall();
         }
     }
     private void HandleRemoteEndCall(MessageEnvelope message)
@@ -787,26 +922,29 @@ internal class MainWindowModel
                 {
                     if (image == null)
                         MainWindowViewModel.SecondaryCanvasSource = null;
+                    else if (image.Width == 0 || image.Height == 0) return;
                     else if (MainWindowViewModel.SecondaryCanvasSource == null
                       || image.Width != MainWindowViewModel.SecondaryCanvasSource.Width
                       || image.Height != MainWindowViewModel.SecondaryCanvasSource.Height)
                     {
-                        MainWindowViewModel.SecondaryCanvasSource = image.ToBitmapSource();
+                        MainWindowViewModel.SecondaryCanvasSource = new WriteableBitmap(image.Width, image.Height, 96, 96,
+                                 PixelFormats.Bgr24, null);
                     }
-                    //  MainWindowViewModel.SecondaryCanvasSource = image.ToBitmapSource();
                     else
                     {
-                        var dst = (System.Windows.Media.Imaging.WriteableBitmap)MainWindowViewModel.SecondaryCanvasSource;
+                        var dst = (WriteableBitmap)MainWindowViewModel.SecondaryCanvasSource;
                         dst.Lock();
                         int width = image.Width;
                         int height = image.Height;
-                        int step = (int)image.Step();
-                        long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
+                        int step = image.Stride;
+                        int range = width * height * 3;
+                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
 
-                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
+
                         dst.Unlock();
-                        GC.KeepAlive(image);
                         // image.Dispose();
+                       // services.ScreenShareHandler.ReturnImage(image);
+
                     }
                 }
                 finally
@@ -818,21 +956,30 @@ internal class MainWindowModel
         };
         ScreenShareHandler.OnBytesAvailable = (byte[] bytes, int count, bool isKeyFrame) =>
         {
+            if (!CallStateManager.IsOnACall)
+                return;
             var env = new MessageEnvelope();
             env.Header = "SCI";
             env.TimeStamp = DateTime.Now;
             env.SetPayload(bytes, 0, count);
 
-            bool isReliable = isKeyFrame && SettingsViewModel.Instance.Config.ReliableIDR;
+            bool isReliable = isKeyFrame /*&& SettingsViewModel.Instance.Config.ReliableIDR*/;
             MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, isReliable);
         };
-        //I know right
+       
         ScreenShareHandler.DecodedFrameWithAction = (writeBufferAction, count, isKeyFrame) =>
         {
+            //if (cc++ > 15 && !isKeyFrame)
+            //{
+            //    cc = 0;
+            //    return;
+            //}
+            if (!CallStateManager.IsOnACall)
+                return;
             var env = new MessageEnvelope();
             env.Header = "SCI";
             env.TimeStamp = DateTime.Now;
-            bool isReliable = isKeyFrame && SettingsViewModel.Instance.Config.ReliableIDR;
+            bool isReliable = isKeyFrame /*&& SettingsViewModel.Instance.Config.ReliableIDR*/;
 
             MessageHandler.SendStreamMessage(CallStateManager.GetCallerId(), env, isReliable, stream => writeBufferAction.Invoke(stream));
 
@@ -842,6 +989,28 @@ internal class MainWindowModel
             var env = new MessageEnvelope();
             env.Header = "SCKFR";
             MessageHandler.SendAsyncMessage(CallStateManager.GetCallerId(), env);
+            DebugLogWindow.AppendLog("Info", "ScreenShare Key frame requested");
+
+        };
+
+        ScreenShareHandler.LtrRecoveryRequest = (b,o,c) =>
+        {
+            var env = new MessageEnvelope();
+            env.Header = MessageHeaders.LtrRecoverySC;
+            env.SetPayload(b, o, c);
+            MessageHandler.SendAsyncMessage(CallStateManager.GetCallerId(), env);
+            DebugLogWindow.AppendLog("Info", "ScreenShare Ltr recovery requested");
+
+        };
+
+        ScreenShareHandler.MarkingFeedback = (b, o, c) =>
+        {
+            var env = new MessageEnvelope();
+            env.Header = MessageHeaders.MarkikngFeedbackSC;
+            env.SetPayload(b, o, c);
+            MessageHandler.SendAsyncMessage(CallStateManager.GetCallerId(), env);
+            DebugLogWindow.AppendLog("Info", "ScreenShare Marking fb");
+
         };
 
         MessageHandler.OnMessageAvailable += (message) =>
@@ -853,6 +1022,16 @@ internal class MainWindowModel
             else if (message.Header.Equals("SCKFR"))
             {
                 ScreenShareHandler.ForceKeyFrame();
+            }
+            else if (message.Header.Equals(MessageHeaders.LtrRecoverySC))
+            {
+                ScreenShareHandler.HandleLtrRecovery(message.Payload, message.PayloadOffset, message.PayloadCount);
+                DebugLogWindow.AppendLog("Info", "ScreenShare Ltr recovery sending");
+
+            }
+            else if (message.Header.Equals(MessageHeaders.MarkikngFeedbackSC))
+            {
+                ScreenShareHandler.HandleMarkingFeedback(message.Payload, message.PayloadOffset, message.PayloadCount);
             }
         };
 
@@ -869,26 +1048,36 @@ internal class MainWindowModel
                     if (image == null)
                     {
                         MainWindowViewModel.PrimaryCanvasSource = null;
+                        return;
+                    }
 
+                    if (image.Width == 0 || image.Height == 0)
+                    {
+                        return;
                     }
                     else if (MainWindowViewModel.PrimaryCanvasSource == null
-                                || image.Width != MainWindowViewModel.PrimaryCanvasSource.Width
-                                || image.Height != MainWindowViewModel.PrimaryCanvasSource.Height)
+                            || image.Width != MainWindowViewModel.PrimaryCanvasSource.Width
+                            || image.Height != MainWindowViewModel.PrimaryCanvasSource.Height)
                     {
-                        MainWindowViewModel.PrimaryCanvasSource = image.ToBitmapSource();
+
+                        MainWindowViewModel.PrimaryCanvasSource = new WriteableBitmap(image.Width, image.Height, 96, 96,
+                                 PixelFormats.Bgr24, null);
                     }
-                    else
+
                     {
-                        var dst = (System.Windows.Media.Imaging.WriteableBitmap)MainWindowViewModel.PrimaryCanvasSource;
+                        var dst = (WriteableBitmap)MainWindowViewModel.PrimaryCanvasSource;
                         dst.Lock();
                         int width = image.Width;
                         int height = image.Height;
-                        int step = (int)image.Step();
-                        long range = image.DataEnd.ToInt64() - image.Data.ToInt64();
+                        int step = image.Stride;
+                        int range = width * height * 3;
 
-                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.Data, (int)range, step);
+                        dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
+
                         dst.Unlock();
+                        services.ScreenShareHandler.ReturnImage(image);
                     }
+
                 }
                 finally
                 {

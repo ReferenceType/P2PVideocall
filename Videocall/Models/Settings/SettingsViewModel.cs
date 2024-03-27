@@ -1,5 +1,8 @@
 ﻿using ProtoBuf;
+using ServiceProvider.Services.Audio;
 using System;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using System.Windows;
@@ -7,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Videocall.Models;
 using Videocall.Services.ScreenShare;
+using Videocall.Services.Video;
 using Videocall.Services.Video.H264;
 using Videocall.UserControls;
 
@@ -89,20 +93,6 @@ namespace Videocall.Settings
             }
         }
 
-        //public ComboBoxItem CompressionFormat
-        //{
-        //    get => compressionFormat; set
-        //    {
-        //        if (value.Content == null) return;
-        //        compressionFormat = value;
-
-        //        HandleCompressionFormatChanged(compressionFormat.Content.ToString());
-        //        OnPropertyChanged();
-        //    }
-        //}
-
-
-
         public double FpsSliderValue
         {
             get => fpsSliderValue;
@@ -174,6 +164,13 @@ namespace Videocall.Settings
         private bool holePunchRequestActive;
         private string averageLatency;
         private bool sendReliable = false;
+        public ObservableCollection<DeviceInfo> InputDevices { get; set; } = new ObservableCollection<DeviceInfo>();
+        public DeviceInfo SelectedDevice { 
+            get => selectedDevice;
+            set { selectedDevice = value; services.AudioHandler.SelectedDevice = value; 
+                services.AudioHandler.InitInputDevice(); 
+            }
+        }
 
         public PersistentSettingConfig Config { get; set; } = PersistentSettingConfig.Instance;
         public string TcpLatency { get => tcpLatency; set { tcpLatency = value; OnPropertyChanged(); } }
@@ -201,8 +198,8 @@ namespace Videocall.Settings
                 cameraChecked = value;
                 if (value)
                 {
-                    services.VideoHandler.ObtainCamera();
-                    services.VideoHandler.StartCapturing();
+                    Task.Run(() => services.VideoHandler.ObtainCamera()).ContinueWith((t) =>
+                 services.VideoHandler.StartCapturing());
                 }
                 else
                 {
@@ -270,6 +267,11 @@ namespace Videocall.Settings
             ClearChatHistoryCommand = new RelayCommand(HandleClearChatHistory);
             ApplyCameraSettingsCmd = new RelayCommand(ApplyCamSettings);
 
+            foreach (var dev in services.AudioHandler.InputDevices) {
+                InputDevices.Add(dev);
+            }
+
+            selectedDevice = InputDevices.FirstOrDefault();
 
             services.MessageHandler.OnDisconnected += OnDisconnected;
             services.LatencyPublisher.Latency += OnLatencyAvailable;
@@ -283,6 +285,8 @@ namespace Videocall.Settings
             MainWindowEventAggregator.Instance.PeerRegistered += OnPeerRegistered;
 
             ApplyCamSettings(null);
+
+
         }
 
         private void HandleServerSearch(object obj)
@@ -353,7 +357,7 @@ namespace Videocall.Settings
 
         }
 
-        private void OnPeerRegistered(PeerInfo info)
+        private void OnPeerRegistered(VCPeerInfo info)
         {
             if (Config.AutoHolepunch)
                 AutoPunch(info.Guid);
@@ -427,23 +431,7 @@ namespace Videocall.Settings
             }
             
 
-            //try
-            //{
-            //    if (peerId.CompareTo(services.MessageHandler.SessionId) > 0)
-            //    {
-            //        var res = await services.MessageHandler.RequestHolePunchAsync(peerId, 5000);
-            //        if (!res)
-            //            AddLog("\nHolePunch Failed on :" + peerId.ToString());
-            //        else
-            //            AddLog("\nHolePunch Sucessfull");
-            //    }
-
-            //}
-            //catch (Exception ee)
-            //{
-            //    AddLog("\nError: " + ee.Message);
-            //}
-
+          
         }
 
         private async void OnHolePunchClicked(object obj)
@@ -465,6 +453,8 @@ namespace Videocall.Settings
             finally { holePunchRequestActive = false; }
         }
         bool punchActive = false;
+        private DeviceInfo selectedDevice;
+
         private async Task Punch(Guid peerId)
         {
             if(punchActive)
@@ -501,8 +491,14 @@ namespace Videocall.Settings
 
         private void HandleListenYourselfToggle(bool value)
         {
+            if(value)
+                services.AudioHandler.StartMic();
+            else if(!CallStateManager.IsOnACall)
+                services.AudioHandler.StopMic();
+
             services.AudioHandler.LoopbackAudio = value;
         }
+
         private void HandleSendReliableToggle(bool value)
         {
            // services.AudioHandler.LoopbackAudio = value;
@@ -552,14 +548,39 @@ namespace Videocall.Settings
             {
                  config = H264Config.Content.ToString();
             }
-            services.VideoHandler.ApplySettings(Config.CamFrameWidth, Config.CamFrameHeight, Config.TargetBps, Config.IdrInterval, Config.CameraIndex,config);
+            services.VideoHandler.EnableCongestionAvoidance = Config.EnableCongestionAvoidance;
+            services.VideoHandler.ApplySettings(Config.CamFrameWidth, Config.CamFrameHeight, Config.TargetBps, Config.IdrInterval, Config.CameraIndex,Config.MinBps);
             string resolution = null;
             if (SCResolution.Content != null)
                 resolution = SCResolution.Content.ToString();
 
-            services.ScreenShareHandler.ApplyChanges(resolution, Config.SCTargetFps);
+            services.ScreenShareHandler.ScreenId = Config.ScreenId;
+            services.ScreenShareHandler.GpuId = Config.GpuId;
+            services.ScreenShareHandler.EnableParalelisation = Config.MultiThreadedScreenShare;
+            services.ScreenShareHandler.ApplyChanges(resolution, Config.SCTargetFps,Config.SCTargetBps,config);
+            
         }
+        //private void CallStateChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        //{
+        //    var currState = CallStateManager.GetState();
+        //    if (currState == CallStateManager.CallState.OnCall)
+        //    {
+        //        Task.Run(() => { services.ResetBuffers(); });
 
+               
+        //    }
+        //    if(currState== CallStateManager.CallState.Available)
+        //    {
+        //        Task.Run(() => 
+        //        {
+        //            services.ResetBuffers();
+        //            services.VideoHandler.HardReset();
+        //            services.AudioHandler.StopSpreakers();
+        //        });
+
+                   
+        //    }
+        //}
         private void DispatcherRun(Action todo)
         {
             try
