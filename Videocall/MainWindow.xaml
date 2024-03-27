@@ -545,6 +545,9 @@
                                                 IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
                                             <!--<CheckBox Foreground="WhiteSmoke" Content="Use WASAPI" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" 
                                                 IsChecked="{Binding SettingsViewModel.Config.UseWasapi}"/>-->
+                                            <Button Content="Reset" HorizontalAlignment="Left" Margin="30,0,0,00" VerticalAlignment="Bottom" Width="60"
+                                                Command="{Binding SettingsViewModel.ResetDevices}"
+                                                    ToolTip="Resets the audiuo devices"/>
                                         </StackPanel>
 
                                         <StackPanel Orientation="Vertical" Margin="0,0,0,0">

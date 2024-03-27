@@ -35,6 +35,7 @@ namespace Videocall.Settings
         public ICommand ClearChatHistoryCommand { get; }
         public ICommand ApplyCameraSettingsCmd { get; }
         public ICommand SearchServerClicked { get; }
+        public ICommand ResetDevices { get; }
 
 
         private ComboBoxItem transportLayer = new ComboBoxItem();
@@ -266,10 +267,22 @@ namespace Videocall.Settings
             HolePunchClickCommand = new RelayCommand(OnHolePunchClicked);
             ClearChatHistoryCommand = new RelayCommand(HandleClearChatHistory);
             ApplyCameraSettingsCmd = new RelayCommand(ApplyCamSettings);
+            ResetDevices = new RelayCommand((x)=>services.AudioHandler.ResetDevices());
 
             foreach (var dev in services.AudioHandler.InputDevices) {
                 InputDevices.Add(dev);
             }
+            services.AudioHandler.InputDevicesUpdated += () => {
+                DispatcherRun(() =>
+                {
+                    InputDevices.Clear();
+                    foreach (var dev in services.AudioHandler.InputDevices)
+                    {
+                        InputDevices.Add(dev);
+                    }
+                });
+               
+            };
 
             selectedDevice = InputDevices.FirstOrDefault();
 

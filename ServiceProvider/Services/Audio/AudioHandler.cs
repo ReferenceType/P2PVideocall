@@ -16,6 +16,7 @@ namespace Videocall
         public Action<AudioSample> OnAudioAvailable;
         public Action<AudioStatistics> OnStatisticsAvailable;
         public Action<SoundSliceData> OnSoundLevelAvailable;
+        public Action InputDevicesUpdated;
 
         public bool LoopbackAudio
         {
@@ -103,11 +104,14 @@ namespace Videocall
             {
                 if (useWasapi)
                 {
+                    InputDevices.Clear();
                     var enumerator = new MMDeviceEnumerator();
                     foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
                     {
                         InputDevices.Add(new DeviceInfo() { Name = wasapi.FriendlyName });
                     }
+                    InputDevicesUpdated?.Invoke();
+
                 }
             });
            
@@ -157,7 +161,33 @@ namespace Videocall
                 }
             });
         }
+        public void ResetDevices()
+        {
+            if (Interlocked.CompareExchange(ref initialized, 0, 0) == 1)
+            {
+                marshaller.Enqueue(() =>
+                {
+                    bool playAgain= player.PlaybackState == PlaybackState.Playing;
+                    bool captureAgain= player.PlaybackState == PlaybackState.Playing;
+                    player?.Stop();
+                    player?.Dispose();
+                    waveIn?.StopRecording();
+                    waveIn?.Dispose();
 
+                    EnumerateDevices();
+
+                    InitOutputDevice();
+                    if(playAgain)
+                        StartSpeakers();
+
+                    InitInputDevice();
+                    if (captureAgain)
+                        StartMic();
+                });
+
+            }
+
+        }
         public void InitInputDevice()
         {
             marshaller.Enqueue(() =>
@@ -188,8 +218,6 @@ namespace Videocall
                     }
 
                     var waveIn_ = new WasapiCapture(inputDevice, true, 20);
-                    //var waveIn = new WaveInEvent();
-                    //waveIn.BufferMilliseconds = 20;
                     waveIn_.WaveFormat = format;
                     waveIn_.DataAvailable += MicrophoneSampleAvailable;
 
