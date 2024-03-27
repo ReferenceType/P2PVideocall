@@ -1,17 +1,16 @@
 # P2PVideocall
-Voice-Video Call Wpf Application based on P2PNetwork. Allows users to have Videocall, Chat and Filetransfer over local network or Internet.
+Voice-Video Call Wpf Application based on P2PNetwork. Allows users to have Videocall, Chat and Filetransfer securely over local network or Internet.
 <br/>Tested and established stable calls between 1.204,5 km distance clients
 <br/>
 <br/>Release available https://github.com/ReferenceType/P2PVideocall/releases/
 ## Features
-- Videocall among connected peers
+- Secure Videocall among connected peers
 - H264 Encoding
-- Persisitent Chat
+- Secure Persisitent Chat
 - Secure File-Directory Transfer with hash file integrity verification(TCP and UDP)
-- High Performance Screen Share based on DirectX 11 API (up to 60 fps @1080p single core).
+- High Performance Secure Screen Share based on DirectX 11 API (up to 60 fps @1080p single core).
 ## Technical features
-- Secure Udp Hole punching
-- End to End encyrption on Tcp And Udp
+- Secure Tcp & Udp Hole punching
 - Reliable Udp channels and Jumbo Udp Message support
 - Congestion Avoidance and Control
 - Dynamic Jitter Buffer for Audio and Video
@@ -25,10 +24,9 @@ Application runs on background when closed with X button, to shut it down fully 
 <img src="https://user-images.githubusercontent.com/109621184/204115163-3c8da2c3-9030-4325-9f4a-28935ed98977.png" width=50% height=50%>
 
 Each application is a Peer client to a Relay Server. This server is used as a randezvous point for Udp Holepunching. 
-If holepunch is sucessfull, all Udp traffic is send directly among peers.
-All TCP data goes through the relay server there is no hole punching for that yet. 
-Furthermore, all reliable communication is through Reliable Udp channel by default.
-Relay server can be found on repository: https://github.com/ReferenceType/RelayServer
+If holepunch is sucessfull, all Tcp & Udp traffic is send directly among peers.Otherwise it will be relayed over the server.
+Tcp holepunch succes rate is lower than udp. All reliable communication is through Reliable Udp channel by default.
+Relay server is included on releases and can be found on repository: https://github.com/ReferenceType/RelayServer
 
 The back-end network core libraries are located on : https://github.com/ReferenceType/StandardNetworkLibrary
 ## How to setup
