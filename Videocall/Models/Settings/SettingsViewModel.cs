@@ -38,7 +38,6 @@ namespace Videocall.Settings
         public ICommand ResetDevices { get; }
 
 
-        private ComboBoxItem transportLayer = new ComboBoxItem();
         private ComboBoxItem fTTransportLayer = new ComboBoxItem();
 
         private string logText;
@@ -70,18 +69,7 @@ namespace Videocall.Settings
         {
             get => logText; set { logText = value; OnPropertyChanged(); }
         }
-
-        public ComboBoxItem TransportLayer
-        {
-            get => transportLayer; set
-            {
-                if (value.Content == null) return;
-                transportLayer = value;
-
-                HandleTransportLayerChanged(transportLayer.Content.ToString());
-                OnPropertyChanged();
-            }
-        }
+        
         public ComboBoxItem FTTransportLayer
         {
             get => fTTransportLayer; set
@@ -128,6 +116,9 @@ namespace Videocall.Settings
             }
         }
 
+        private bool listenYourselfEnabled=true;
+        public bool ListenYourselfEnabled { get => listenYourselfEnabled; set { listenYourselfEnabled = value; OnPropertyChanged(); } }
+
         public bool ListenYourselfCheck
         {
             get => listenYourselfCheck; set
@@ -168,8 +159,28 @@ namespace Videocall.Settings
         public ObservableCollection<DeviceInfo> InputDevices { get; set; } = new ObservableCollection<DeviceInfo>();
         public DeviceInfo SelectedDevice { 
             get => selectedDevice;
-            set { selectedDevice = value; services.AudioHandler.SelectedDevice = value; 
-                services.AudioHandler.InitInputDevice(); 
+            set 
+            {
+                if (selectedDevice == value)
+                {
+                    OnPropertyChanged();
+                    return;
+                }
+
+                selectedDevice = value;
+                services.AudioHandler.SelectedDevice = value; 
+                services.AudioHandler.ChangeDevice();
+                OnPropertyChanged();
+            }
+        }
+        private int selectedDeviceIndex;
+        public int SelectedDeviceIndex
+        {
+            get => selectedDeviceIndex;
+            set 
+            {
+                selectedDeviceIndex = value;
+                OnPropertyChanged();
             }
         }
 
@@ -200,7 +211,7 @@ namespace Videocall.Settings
                 if (value)
                 {
                     Task.Run(() => services.VideoHandler.ObtainCamera()).ContinueWith((t) =>
-                 services.VideoHandler.StartCapturing());
+                        services.VideoHandler.StartCapturing());
                 }
                 else
                 {
@@ -252,7 +263,6 @@ namespace Videocall.Settings
         public SoundSliceData SoudVisualData { get => soudVisualData; set { soudVisualData = value; OnPropertyChanged(); } }
 
 
-
         private bool enableSoundVisualPublish;
 
         private bool rectifiedSignalChecked;
@@ -280,11 +290,18 @@ namespace Videocall.Settings
                     {
                         InputDevices.Add(dev);
                     }
+                    SelectedDeviceIndex = InputDevices.IndexOf(services.AudioHandler.SelectedDevice);
+                    if (SelectedDeviceIndex == -1)
+                    {
+                        SelectedDeviceIndex = 0;
+                    }
+
+                   // Task.Delay(100).ContinueWith((t)=> DispatcherRun(() => SelectedDevice = services.AudioHandler.SelectedDevice));
                 });
                
             };
 
-            selectedDevice = InputDevices.FirstOrDefault();
+            selectedDevice = services.AudioHandler.SelectedDevice;
 
             services.MessageHandler.OnDisconnected += OnDisconnected;
             services.LatencyPublisher.Latency += OnLatencyAvailable;
@@ -504,22 +521,15 @@ namespace Videocall.Settings
 
         private void HandleListenYourselfToggle(bool value)
         {
-            if(value)
-                services.AudioHandler.StartMic();
-            else if(!CallStateManager.IsOnACall)
-                services.AudioHandler.StopMic();
-
-            services.AudioHandler.LoopbackAudio = value;
+            if(!CallStateManager.IsOnACall)
+                services.AudioHandler.LoopbackAudio = value;
         }
 
         private void HandleSendReliableToggle(bool value)
         {
            // services.AudioHandler.LoopbackAudio = value;
         }
-        private void HandleTransportLayerChanged(string value)
-        {
-            services.MessageHandler.TransportLayer = value;
-        }
+      
         private void HandleFTTransportLayerChanged(string value)
         {
             services.MessageHandler.FTTransportLayer = value;
@@ -545,7 +555,7 @@ namespace Videocall.Settings
 
         private void HandleBufferDurationChanged(double value)
         {
-            services.AudioHandler.BufferLatency = (int)value;
+            services.AudioHandler.JitterBufferMaxCapacity = (int)value;
             services.VideoHandler.VideoLatency = (int)value;
 
         }

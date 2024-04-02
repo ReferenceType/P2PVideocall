@@ -23,23 +23,34 @@ namespace Videocall
             get => loopbackAudio;
             set
             {
-                if(value)
-                    StartSpeakers();
-                else 
-                    StopSpreakers();
+                PrepLoopbackAudio(value);
                 loopbackAudio = value;
             }
         }
-        public int BufferLatency
+
+
+        public int OutBufferCapacity {
+            get => outBufferCapacity;
+            set {
+                outBufferCapacity = value;
+                //ResizeOutputBuffer(value);
+            }
+
+        }
+
+        
+
+        public int JitterBufferMaxCapacity
         {
-            get => bufferLatency;
+            get => jitterBufferMaxCapacity;
             set
             {
-                if (value < bufferLatency)
-                    jitterBuffer.DiscardSamples((int)soundListenBuffer.BufferDuration.TotalMilliseconds / 20);
+                if (value < jitterBufferMaxCapacity)
+                    jitterBuffer.DiscardSamples((int)soundListenBuffer.BufferDuration.TotalMilliseconds / captureInterval);
                 // drop the amount of buffered duration
-                bufferLatency = value;
+                jitterBufferMaxCapacity = value;
                 jitterBuffer.BufferLatency = value;
+               // OutBufferCapacity=value+100;
             }
         }
         public float Gain { get => gain;
@@ -73,83 +84,53 @@ namespace Videocall
         private SharerdMemoryStreamPool streamPool = new SharerdMemoryStreamPool();
         private ushort currentSqnNo;
         private int lastLostPackckageAmount = 0;
-        private int bufferLatency = 200;
+        private int jitterBufferMaxCapacity = 200;
+        private int captureInterval = 40;
         private int bitrate;
         private bool loopbackAudio;
         private float gain=1;
-        private int initialized = 0;
         private int disposing_ = 0;
-        private int playerRunning = 0;
+        private int outBufferCapacity = 350;
+
         private readonly object operationLocker = new object();
         private readonly object commandLocker = new object();
         private readonly object networkLocker = new object();
-        public bool useWasapi = true;
-
+        private bool useWasapi = true;
+        
         private SingleThreadDispatcher marshaller;
 
+        enum DeviceState
+        {
+            Uninitialized,
+            Initialized,
+            Playing,
+            Paused,
+            Stopped,
+            Disposed
+        }
        
+        DeviceState outState;
+        private DeviceState inState;
         public AudioHandler()
         {
             marshaller = new SingleThreadDispatcher();
             EnumerateDevices();
-            jitterBuffer = new JitterBuffer(BufferLatency);
+
+            jitterBuffer = new JitterBuffer(JitterBufferMaxCapacity);
             jitterBuffer.OnSamplesCollected += DecodeAudio;
-        }
+            jitterBuffer.CaptureInterval = captureInterval;
 
-       
-
-        public void EnumerateDevices()
-        {
-            marshaller.EnqueueBlocking(() =>
-            {
-                if (useWasapi)
-                {
-                    InputDevices.Clear();
-                    var enumerator = new MMDeviceEnumerator();
-                    foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
-                    {
-                        InputDevices.Add(new DeviceInfo() { Name = wasapi.FriendlyName });
-                    }
-                    InputDevicesUpdated?.Invoke();
-
-                }
-            });
-           
-        }
-      
-        public void CheckInit()
-        {
-            lock (operationLocker)
-            {
-                if (Interlocked.CompareExchange(ref initialized, 1, 0) == 0)
-                {
-                    marshaller.EnqueueBlocking(() =>
-                    {
-                        Init();
-                    });
-                  
-                }
-            }
-        }
-        private void Init()
-        {
             bitrate = 64000;
             encoderState = new G722CodecState(bitrate, G722Flags.None);
             decoderState = new G722CodecState(bitrate, G722Flags.None);
             codec = new G722Codec();
 
             soundListenBuffer = new BufferedWaveProvider(format);
-            soundListenBuffer.BufferLength = 65 * format.SampleRate / 100;
+            soundListenBuffer.BufferLength = 320 * format.AverageBytesPerSecond / 1000;
             soundListenBuffer.DiscardOnBufferOverflow = true;
 
             volumeSampleProvider = new VolumeSampleProvider(soundListenBuffer.ToSampleProvider());
             volumeSampleProvider.Volume = Gain;
-
-            InitOutputDevice();
-
-            
-
-            InitInputDevice();
 
             Task.Run(async () =>
             {
@@ -161,102 +142,154 @@ namespace Videocall
                 }
             });
         }
-        public void ResetDevices()
+
+       
+
+        public void EnumerateDevices()
         {
-            if (Interlocked.CompareExchange(ref initialized, 0, 0) == 1)
+            marshaller.EnqueueBlocking(() =>
             {
-                marshaller.Enqueue(() =>
+                EnumerateDevicesInternal();
+            });
+           
+        }
+
+        private void EnumerateDevicesInternal()
+        {
+            if (useWasapi)
+            {
+                InputDevices.Clear();
+                var enumerator = new MMDeviceEnumerator();
+                foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, NAudio.CoreAudioApi.DeviceState.Active))
                 {
-                    bool playAgain= player.PlaybackState == PlaybackState.Playing;
-                    bool captureAgain= player.PlaybackState == PlaybackState.Playing;
-                    player?.Stop();
-                    player?.Dispose();
-                    waveIn?.StopRecording();
-                    waveIn?.Dispose();
+                    InputDevices.Add(new DeviceInfo() { Name = wasapi.FriendlyName });
+                }
+                var inp = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                enumerator.Dispose();
 
-                    EnumerateDevices();
+                if (inp == null)
+                    return;
 
-                    InitOutputDevice();
-                    if(playAgain)
-                        StartSpeakers();
-
-                    InitInputDevice();
-                    if (captureAgain)
-                        StartMic();
-                });
+                SelectedDevice= InputDevices.Where(x => x.Name == inp.FriendlyName).FirstOrDefault()!;
+                InputDevicesUpdated?.Invoke();
 
             }
-
         }
-        public void InitInputDevice()
+
+        public void ResetDevices()
         {
+            
             marshaller.Enqueue(() =>
             {
-                if (useWasapi)
+                bool playAgain= outState== DeviceState.Playing;
+                bool captureAgain = inState == DeviceState.Playing;
+
+                if(inState != DeviceState.Uninitialized)
                 {
-                    if (Interlocked.CompareExchange(ref initialized, 0, 0) == 0)
-                        return;
-
-                    MMDevice inputDevice = null;
-
-                    var enumerator = new MMDeviceEnumerator();
-                    List<MMDevice> devices = new List<MMDevice>();
-                    foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
-                    {
-                        devices.Add(wasapi);
-                    }
-
-                    if (SelectedDevice != null)
-                    {
-                        inputDevice = devices.Where(x => x.FriendlyName == SelectedDevice.Name).FirstOrDefault()!;
-
-                    }
-
-                    if (inputDevice == null)
-                    {
-                        inputDevice = new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-                    }
-
-                    var waveIn_ = new WasapiCapture(inputDevice, true, 20);
-                    waveIn_.WaveFormat = format;
-                    waveIn_.DataAvailable += MicrophoneSampleAvailable;
-
-                    var old = Interlocked.Exchange(ref waveIn, waveIn_);
-                    if (old != null && ((WasapiCapture)old).CaptureState == CaptureState.Capturing)
-                    {
-                        old.StopRecording();
-                        old.Dispose();
-                        waveIn.StartRecording();
-                    }
+                    waveIn?.StopRecording();
+                    waveIn?.Dispose();
                 }
-                else
+                if (outState != DeviceState.Uninitialized)
                 {
-                    if (Interlocked.CompareExchange(ref initialized, 0, 0) == 0)
-                        return;
-
-
-                    var waveIn_ = new WaveInEvent();
-                    waveIn_.BufferMilliseconds = 20;
-                    waveIn_.WaveFormat = format;
-                    waveIn_.DataAvailable += MicrophoneSampleAvailable;
-
-                    var old = Interlocked.Exchange(ref waveIn, waveIn_);
-                    if (old != null)
-                    {
-                        old.StopRecording();
-                        old.Dispose();
-                        waveIn.StartRecording();
-                    }
+                    player?.Stop();
+                    player?.Dispose();
                 }
 
-            });            
+                EnumerateDevicesInternal();
+
+                outState = DeviceState.Uninitialized;
+                InitOutputDevice();
+                if(playAgain)
+                    StartSpeakersInternal();
+
+                inState = DeviceState.Uninitialized;
+                InitInputDevice();
+                if (captureAgain)
+                    StartMicInternal();
+            });
+
+            
+
+        }
+
+        private void InitInputDevice()
+        {
+
+            if (inState != DeviceState.Uninitialized)
+            {
+                return;
+            }
+
+            if (useWasapi)
+            {
+                MMDevice inputDevice = null;
+
+                var enumerator = new MMDeviceEnumerator();
+                List<MMDevice> devices = new List<MMDevice>();
+                foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, NAudio.CoreAudioApi.DeviceState.Active))
+                {
+                    devices.Add(wasapi);
+                }
+
+                if (SelectedDevice != null)
+                {
+                    inputDevice = devices.Where(x => x.FriendlyName == SelectedDevice.Name).FirstOrDefault()!;
+
+                }
+
+                if (inputDevice == null)
+                {
+                    inputDevice = new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+                }
+
+                if (inputDevice == null)
+                {
+                    return;
+                }
+                var waveIn_ = new WasapiCapture(inputDevice, true, captureInterval);
+                waveIn_.WaveFormat = format;
+                waveIn_.DataAvailable += MicrophoneSampleAvailable;
+                var old = Interlocked.Exchange(ref waveIn, waveIn_);
+                //if (old != null && ((WasapiCapture)old).CaptureState == CaptureState.Capturing)
+                //{
+                //    old.StopRecording();
+                //    old.Dispose();
+                //    waveIn.StartRecording();
+                //}
+            }
+            else
+            {
+
+                var waveIn_ = new WaveInEvent();
+                waveIn_.BufferMilliseconds = captureInterval;
+                waveIn_.WaveFormat = format;
+                waveIn_.DataAvailable += MicrophoneSampleAvailable;
+
+                var old = Interlocked.Exchange(ref waveIn, waveIn_);
+                if (old != null)
+                {
+                    old.StopRecording();
+                    old.Dispose();
+                    waveIn.StartRecording();
+                }
+            }
+
+            inState = DeviceState.Initialized;
+
+
         }
 
         private void InitOutputDevice()
         {
+            if (outState != DeviceState.Uninitialized)
+            {
+                return;
+            }
             if (useWasapi)
             {
                 var outputDevice = new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Render, Role.Communications);
+                if (outputDevice == null)
+                    return;
                 var player_ = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 60);
                 player_.Init(volumeSampleProvider);
                 Interlocked.Exchange(ref player, player_)?.Dispose();
@@ -269,13 +302,62 @@ namespace Videocall
                 Interlocked.Exchange(ref player, player_)?.Dispose();
 
             }
+            outState= DeviceState.Initialized;
         }
-      
-      
+        private void UninitializeOutputDev()
+        {
+            if (outState != DeviceState.Uninitialized)
+            {
+                player?.Stop();
+                player?.Dispose();
+                outState= DeviceState.Uninitialized;
+            }
+        }
+        bool valueActive = false;
+        bool operRunning = false;
+        int lastVal= 0; 
+        private async void ResizeOutputBuffer(int ms)
+        {
+            valueActive = true;
+            lastVal = ms;
+
+            if(operRunning)
+                return;
+            Top:
+            operRunning = true;
+            marshaller.Enqueue(() =>
+            {
+                bool replay = outState == DeviceState.Playing;
+
+                soundListenBuffer.ClearBuffer();
+                UninitializeOutputDev();
+                soundListenBuffer = new BufferedWaveProvider(format);
+                soundListenBuffer.BufferLength = lastVal * format.AverageBytesPerSecond / 1000;
+                soundListenBuffer.DiscardOnBufferOverflow = true;
+                InitOutputDevice();
+
+               // if(replay)
+                    StartSpeakers();
+
+            });
+            await Task.Delay(500);
+            if (!valueActive)
+                operRunning = false;
+            else
+            {
+                valueActive = false;
+               goto Top;
+            }
+           
+        }
         private void MicrophoneSampleAvailable(object sender, WaveInEventArgs e)
         {
             try
             {
+                captureInterval= 1000/(format.AverageBytesPerSecond/e.BytesRecorded);
+                if(jitterBuffer.CaptureInterval!= captureInterval)
+                    jitterBuffer.CaptureInterval = captureInterval;
+
                 byte[] res;
                 res = EncodeG722(e.Buffer, 0, e.BytesRecorded, out int encoded);
                 currentSqnNo++;
@@ -334,7 +416,7 @@ namespace Videocall
 
                 if (Interlocked.CompareExchange(ref disposing_, 0, 0) == 1)
                     return;
-                if (Interlocked.CompareExchange(ref playerRunning, 0, 0) == 0)
+                if (outState != DeviceState.Playing)
                     return;
                
                 jitterBuffer.AddSample(sample);
@@ -346,7 +428,7 @@ namespace Videocall
         {
             if (Interlocked.CompareExchange(ref disposing_, 0, 0) == 1)
                 return;
-            if (Interlocked.CompareExchange(ref playerRunning, 0, 0) == 0)
+            if (outState != DeviceState.Playing)
                 return;
 
 
@@ -357,7 +439,7 @@ namespace Videocall
             {
                 if (Interlocked.CompareExchange(ref disposing_, 0, 0) == 1)
                     return;
-                if (Interlocked.CompareExchange(ref playerRunning, 0, 0) == 0)
+                if (outState != DeviceState.Playing)
                     return;
 
                 var buffer = DecodeStream.GetBuffer();
@@ -380,30 +462,34 @@ namespace Videocall
         {
             lock (commandLocker)
             {
-
-                CheckInit();
                 marshaller.Enqueue(() =>
                 {
-                    if (player.PlaybackState == PlaybackState.Playing)
-                        return;
+                    StartSpeakersInternal();
 
-                    player.Play();
-                    Interlocked.Exchange(ref playerRunning, 1);
                 });
 
             }
         }
+        private void StartSpeakersInternal()
+        {
+            if (outState == DeviceState.Playing)
+                return;
+            if (outState == DeviceState.Uninitialized)
+                return;
 
+            player.Play();
+            outState = DeviceState.Playing;
+        }
         public void StopSpreakers()
         {
             lock (commandLocker)
             {
                 marshaller.Enqueue(() =>
                 {
-                    if (player != null && player.PlaybackState == PlaybackState.Playing)
+                    if (outState == DeviceState.Playing)
                     {
-                        Interlocked.Exchange(ref playerRunning, 0);
                         player.Stop();
+                        outState= DeviceState.Stopped;
                     }
                 });
             }
@@ -413,21 +499,28 @@ namespace Videocall
         {
             lock (commandLocker)
             {
-                CheckInit();
-
                 marshaller.Enqueue(() =>
                 {
-
-                    try
-                    {
-                        currentSqnNo = 0;
-                        waveIn.StartRecording();
-                    }
-                    catch { }
+                    StartMicInternal();
                 });
 
             }
 
+        }
+        private void StartMicInternal()
+        {
+            if (inState == DeviceState.Uninitialized)
+                return;
+            if (inState == DeviceState.Playing)
+                return;
+
+            try
+            {
+                currentSqnNo = 0;
+                waveIn.StartRecording();
+                inState = DeviceState.Playing;
+            }
+            catch { }
         }
         public void StopMic()
         {
@@ -435,10 +528,13 @@ namespace Videocall
             {
                 marshaller.Enqueue(() =>
                 {
+                    if (inState != DeviceState.Playing)
+                        return;
                     try
                     {
                         waveIn?.StopRecording();
                         currentSqnNo = 0;
+                        inState = DeviceState.Stopped;
                     }
                     catch { }
                 });
@@ -614,7 +710,6 @@ namespace Videocall
             marshaller.EnqueueBlocking(() =>
             {
                 Interlocked.Exchange(ref disposing_, 1);
-                Interlocked.Exchange(ref playerRunning, 0);
 
                 if (!disposedValue)
                   {
@@ -624,11 +719,17 @@ namespace Videocall
 
                       try
                       {
-                          player?.Stop();
-                          player?.Dispose();
-                          waveIn?.StopRecording();
-                          waveIn?.Dispose();
-                      }
+                        player?.Stop();
+                        outState = DeviceState.Stopped;
+
+                        waveIn?.StopRecording();
+                        inState = DeviceState.Stopped;
+
+                        player?.Dispose();
+                        waveIn?.Dispose();
+                        outState = DeviceState.Uninitialized;
+                        inState = DeviceState.Uninitialized;
+                    }
                       catch { }
                       disposedValue = true;
                   }
@@ -648,7 +749,67 @@ namespace Videocall
             GC.SuppressFinalize(this);
         }
 
-        
+        public void InitializeDevices()
+        {
+            marshaller.EnqueueBlocking(() =>
+            {
+                if (inState == DeviceState.Uninitialized)
+                    InitInputDevice();
+                if (outState == DeviceState.Uninitialized)
+                    InitOutputDevice();
+
+            });
+        }
+
+        public void ShutdownDevices()
+        {
+            marshaller.Enqueue(() =>
+            {
+                player?.Stop();
+                player?.Dispose();
+                waveIn?.StopRecording();
+                waveIn?.Dispose();
+
+                outState = DeviceState.Uninitialized;
+                inState = DeviceState.Uninitialized;
+            });
+        }
+        private void PrepLoopbackAudio(bool on)
+        {
+            if (on)
+            {
+                InitializeDevices();
+                StartSpeakers();
+                StartMic();
+            }
+            else
+            {
+                ShutdownDevices();
+            }
+        }
+
+        public void ChangeDevice()
+        {
+            bool playAgain= false;  
+            marshaller.EnqueueBlocking(() =>
+            {
+                playAgain= inState == DeviceState.Playing;
+                if (inState != DeviceState.Uninitialized)
+                {
+                    waveIn?.StopRecording();
+                    waveIn?.Dispose();
+                    inState = DeviceState.Uninitialized;
+                }
+
+                InitInputDevice();
+                if(playAgain)
+                {
+                    StartMic();
+                }
+            });
+           
+
+        }
     }
 
     #region Small Data

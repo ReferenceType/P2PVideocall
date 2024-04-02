@@ -16,7 +16,8 @@ namespace Videocall
         public int NumLostPackages = 0;
         public int BufferLatency;
         public int MinBufferLatency = 60;
-        public int Duration => numSeqBuffered * 20;
+        public int CaptureInterval = 20;
+        public int Duration => numSeqBuffered * CaptureInterval;
         private ConcurrentDictionary<DateTime, AudioSample> samples = new ConcurrentDictionary<DateTime, AudioSample>();
         private readonly object locker = new object();
         private MemoryStream sampleStream = new MemoryStream();
@@ -57,7 +58,7 @@ namespace Videocall
                     //int toTake = Math.Min(2, numSeqBuffered) + (samplesOrdered_.Count() - (BufferLatency / 20));
                     IEnumerable<KeyValuePair<DateTime, AudioSample>> samplesOrdered;
                     // jittr buffer reached max duration, we have to take even if seq is broken
-                    if (numSeqBuffered >= BufferLatency / 20)
+                    if (numSeqBuffered >= BufferLatency / CaptureInterval)
                     {
                         int toTake = Math.Max(2, consequtiveSeqLenght+1);
                         samplesOrdered = samplesOrdered_.Take(Math.Min(toTake, samplesOrdered_.Count()));

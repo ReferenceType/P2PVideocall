@@ -136,25 +136,22 @@ internal class MainWindowModel
 
         var currState = CallStateManager.GetState();
 
-        //if (currState == CallStateManager.CallState.ReceivingCall)
-        //    Task.Delay(100).ContinueWith((t)=>receivingCallSound.PlayLooping());
-        //else
-        //    receivingCallSound.Stop();
-
-        //if (currState == CallStateManager.CallState.Calling)
-        //    callingSound.PlayLooping();
-        //else
-        //    callingSound.Stop();
+        
         Task.Run(() =>
         {
             if (currState == CallStateManager.CallState.OnCall)
             {
                 services.ResetBuffers();
-                services.AudioHandler.CheckInit();
+
+                if(services.AudioHandler.LoopbackAudio)
+                    services.AudioHandler.LoopbackAudio = false;
+                SettingsViewModel.Instance.ListenYourselfCheck = false;
+                SettingsViewModel.Instance.ListenYourselfEnabled= false;
+                services.AudioHandler.InitializeDevices();
                 services.AudioHandler.StartSpeakers();
                 if (mainWindowViewModel.MicroponeChecked && currState == CallStateManager.CallState.OnCall)
                 {
-                    Task.Delay(50).ContinueWith((t) =>
+                    Task.Delay(500).ContinueWith((t) =>
                     {
                         services.AudioHandler.StartMic();
                     });
@@ -176,10 +173,11 @@ internal class MainWindowModel
                
                 services.ResetBuffers();
                 services.VideoHandler.HardReset();
+                services.AudioHandler.ShutdownDevices();
+                SettingsViewModel.Instance.ListenYourselfEnabled = true;
 
-                services.AudioHandler.StopSpreakers();
-                services.AudioHandler.StopMic();
-               // hangupSound.Play();
+
+                // hangupSound.Play();
 
                 HandleCamActivated(false);
                 DispatcherRun(() =>
@@ -560,7 +558,7 @@ internal class MainWindowModel
                     dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
 
                     dst.Unlock();
-                    services.VideoHandler.ReturnImage(image);
+                    image.ReturnImage.Invoke();
                 }
             }
             finally
@@ -678,7 +676,7 @@ internal class MainWindowModel
                     dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
 
                     dst.Unlock();
-                    services.VideoHandler.ReturnImage(image);
+                    image.ReturnImage.Invoke();
                    
                 }
             }
@@ -766,6 +764,7 @@ internal class MainWindowModel
         if (value&& CallStateManager.GetState() == CallStateManager.CallState.OnCall)
         {
             services.MessageHandler.SendAsyncMessage(CallStateManager.GetCallerId(), new MessageEnvelope() { Header = MessageHeaders.MicClosed });
+            services.AudioHandler.InitializeDevices();
             services.AudioHandler.StartMic();
         }
         else
@@ -942,8 +941,7 @@ internal class MainWindowModel
 
 
                         dst.Unlock();
-                        // image.Dispose();
-                       // services.ScreenShareHandler.ReturnImage(image);
+                        image.ReturnImage.Invoke();
 
                     }
                 }
@@ -1075,7 +1073,7 @@ internal class MainWindowModel
                         dst.WritePixels(new Int32Rect(0, 0, width, height), image.DataStart, range, step);
 
                         dst.Unlock();
-                        services.ScreenShareHandler.ReturnImage(image);
+                        image.ReturnImage.Invoke();
                     }
 
                 }

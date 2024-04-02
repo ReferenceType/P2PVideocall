@@ -1,5 +1,4 @@
-﻿using OpenCvSharp;
-using System;
+﻿using System;
 using Videocall.Services.Video;
 using System.Threading;
 using System.Collections.Concurrent;
@@ -69,7 +68,7 @@ namespace Videocall.Services.ScreenShare
         {
             transcoder = new H264Transcoder(targetFps, 2_000_000);
             transcoder.SetupTranscoder(0, 0, configType);
-            transcoder.DecodedFrameAvailable = (f) => { incomingFrames++; RemoteImageAvailable?.Invoke(ImageReference.FromRgbImage(f)); };
+            transcoder.DecodedFrameAvailable = (f) => { incomingFrames++; RemoteImageAvailable?.Invoke(f); };
             transcoder.EncodedFrameAvailable = (b, o, k) => { bytesSent += o; OnBytesAvailable?.Invoke(b, o, k); };
 
             //transcoder.EncodedFrameAvailable2 = (action, size, isKeyFrame) => 
@@ -114,13 +113,11 @@ namespace Videocall.Services.ScreenShare
             }
 
         }
-
+        ConcurrentBag<RgbImage> previewImgs = new ConcurrentBag<RgbImage>();
         private void BeginCaptureThread(float scale)
         {
-            Mat mainMat = null;
-            Mat Yuv420Mat = new Mat();
-            Mat smallMat = new Mat();
-            RgbImage smallThumb =null;
+          
+           // RgbImage smallThumb =null;
             screenCapture.CaptureAuto(targetFps,
                (img) =>
                {
@@ -131,10 +128,6 @@ namespace Videocall.Services.ScreenShare
                        pendingChanges = false;
                        transcoder.ApplyChanges(targetFps,TargetKBps * 1000, img.Width, img.Height, configType);
                    }
-
-                 
-
-                   
 
                    if (!parallel)
                    {
@@ -181,6 +174,7 @@ namespace Videocall.Services.ScreenShare
                                                      img.Width * img.Height * 3);
 
                    int mul = 8;
+                   previewImgs.TryTake(out RgbImage smallThumb);
                    if(smallThumb == null)
                    {
                        smallThumb = new RgbImage(data.Width / mul, data.Height / mul);
@@ -194,9 +188,9 @@ namespace Videocall.Services.ScreenShare
 
                    transcoder.Downscale(data, smallThumb, mul);
                    sww.Stop();
-                   Trace.WriteLine("DS " + sww.ElapsedTicks);
-                   LocalImageAvailable?.Invoke(ImageReference.FromRgbImage(smallThumb));
                   
+                   LocalImageAvailable?.Invoke(ImageReference.FromRgbImage(smallThumb, ReturnSmallImg));
+
                    //smallThumb.Dispose();
                    //smallThumb = null;
 
@@ -205,6 +199,10 @@ namespace Videocall.Services.ScreenShare
                });
         }
 
+        private void ReturnSmallImg(ImageReference imRef)
+        {
+            previewImgs.Add((RgbImage)imRef.underlyingData);
+        }
        
       
         private void EncodeParallel()
@@ -370,10 +368,6 @@ namespace Videocall.Services.ScreenShare
             transcoder.SetLTRRecoverRequest(payload, payloadOffset, payloadCount);
         }
 
-        public void ReturnImage(ImageReference image)
-        {
-            if(image.underlyingData is RgbImage)
-                transcoder.ReturnImage((RgbImage)image.underlyingData);
-        }
+       
     }
 }

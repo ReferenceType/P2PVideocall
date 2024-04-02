@@ -261,8 +261,8 @@
                                                        ToolTip="You can switch during call"/>
                                                 <ComboBox HorizontalAlignment="Left" IsSynchronizedWithCurrentItem="True"
                                                            Margin="1,4,0,0" VerticalAlignment="Top" Width="120" IsReadOnly="True" 
-                                                           SelectedItem="{Binding SettingsViewModel.TransportLayer,Mode=TwoWay}"  >
-                                                           <ComboBoxItem  Content="Udp" IsSelected="True"/>
+                                                           SelectedIndex="{Binding SettingsViewModel.Config.TransportLayer,Mode=TwoWay}"  >
+                                                           <ComboBoxItem  Content="Udp"/>
                                                            <ComboBoxItem  Content="Tcp"/>
                                                 </ComboBox>
                                             </StackPanel>
@@ -542,6 +542,7 @@
                                         <Label Content="Audio Settings" HorizontalAlignment="Center"  VerticalAlignment="Top" FontWeight="Bold"/>
                                         <StackPanel Orientation="Horizontal">
                                             <CheckBox Foreground="WhiteSmoke" Content="Listen Yourself" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" 
+                                                IsEnabled="{Binding SettingsViewModel.ListenYourselfEnabled}"
                                                 IsChecked="{Binding SettingsViewModel.ListenYourselfCheck}"/>
                                             <!--<CheckBox Foreground="WhiteSmoke" Content="Use WASAPI" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" 
                                                 IsChecked="{Binding SettingsViewModel.Config.UseWasapi}"/>-->
@@ -551,10 +552,11 @@
                                         </StackPanel>
 
                                         <StackPanel Orientation="Vertical" Margin="0,0,0,0">
-                                            <Label Content="Output Device: "></Label>
+                                            <Label Content="Input Device: "></Label>
                                             <ComboBox Width="185" HorizontalAlignment="Left" Margin="5,0,0,0"
                                                       ItemsSource="{Binding Path= SettingsViewModel.InputDevices}"
                                                       DisplayMemberPath="Name"
+                                                      SelectedIndex="{Binding Path= SettingsViewModel.SelectedDeviceIndex, Mode=TwoWay}"
                                                       SelectedItem="{Binding Path= SettingsViewModel.SelectedDevice}"></ComboBox>
 
                                         </StackPanel>
@@ -567,9 +569,9 @@
                                         </StackPanel>
 
 
-                                        <Label Content="Jitter Buffer Duration" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
+                                        <Label Content="Jitter Buffer Max Duration" HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top"/>
                                         <Slider HorizontalAlignment="Left" Margin="5,0,0,0" VerticalAlignment="Top" Width="185" 
-                                                AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="600" Minimum="60"
+                                                AutoToolTipPlacement="TopLeft" AutoToolTipPrecision="3" Maximum="300" Minimum="60"
                                                 Value="{Binding SettingsViewModel.BufferDurationValue}"
                                                 ToolTip="Jitter buffer duration represents maximum allowed time to wait for a missing audio sample in miliseconds"/>
 

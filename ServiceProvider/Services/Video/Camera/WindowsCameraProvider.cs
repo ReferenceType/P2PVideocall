@@ -1,5 +1,6 @@
 ﻿using OpenCvSharp;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,7 +10,8 @@ namespace ServiceProvider.Services.Video.Camera
 {
     public class WindowsCameraProvider : ICameraProvider
     {
-        readonly Mat frame = new Mat();
+        private ConcurrentBag<Mat> mats = new ConcurrentBag<Mat>();
+        private ConcurrentBag<ImageReference> imrefs = new ConcurrentBag<ImageReference>();
         readonly VideoCapture capture;
         private int frameWidth => capture.FrameWidth;
         private int frameHeight => capture.FrameHeight;
@@ -48,8 +50,20 @@ namespace ServiceProvider.Services.Video.Camera
             return capture.Grab();
         }
 
-        public bool Retrieve(ref ImageReference im)
+        public bool Retrieve(out ImageReference im)
         {
+            mats.TryTake(out var frame);
+            imrefs.TryTake(out im);
+
+            if (frame == null)
+            {
+                frame= new Mat();
+            }
+            if (frame.Width != capture.FrameWidth || frame.Height != capture.FrameHeight)
+            {
+                frame.Dispose();
+                frame =  new Mat();
+            }
 
             var res = capture.Retrieve(frame);
             if (res == false)
@@ -58,7 +72,7 @@ namespace ServiceProvider.Services.Video.Camera
             }
             if (im == null)
             {
-                im = ImageReference.FromMat(frame);
+                im = ImageReference.FromMat(frame,ReturnMat);
             }
             else
             {
@@ -67,6 +81,12 @@ namespace ServiceProvider.Services.Video.Camera
             }
             return res;
 
+        }
+
+        private void ReturnMat(ImageReference reference)
+        {
+            imrefs.Add(reference);
+            mats.Add((Mat)reference.underlyingData);
         }
     }
 }

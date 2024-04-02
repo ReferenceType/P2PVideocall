@@ -18,7 +18,7 @@ namespace ServiceProvider.Services.Video
         public int Offset;
         public int Length;
         public int Width, Height, Stride;
-
+        public Action ReturnImage;
         public IntPtr DataStart {
             get
             {
@@ -39,17 +39,18 @@ namespace ServiceProvider.Services.Video
             }
             set => dataStart = value; }
 
-        public ImageReference(object underlyingData, IntPtr dataPtr, int width, int height, int stride)
+        public ImageReference(object underlyingData, IntPtr dataPtr, int width, int height, int stride, Action<ImageReference> whenReturning)
         {
-            Create(underlyingData, dataPtr, width, height, stride);
+            Create(underlyingData, dataPtr, width, height, stride, () => whenReturning.Invoke(this));
         }
-        private void Create(object underlyingData, IntPtr dataPtr, int width, int height, int stride)
+        private void Create(object underlyingData, IntPtr dataPtr, int width, int height, int stride, Action whenReturning)
         {
             this.underlyingData = underlyingData;
             this.DataStart = dataPtr;
             Width = width;
             Height = height;
             Stride = stride;
+            ReturnImage = whenReturning;
         }
 
         public ImageReference( byte[] data, int offset, int length, int width, int height, int stride)
@@ -65,17 +66,21 @@ namespace ServiceProvider.Services.Video
 
         public void Update(Mat mat)
         {
-             Create(mat, mat.DataStart, mat.Width, mat.Height, (int)mat.Step());
+            
+             Create(mat, mat.DataStart, mat.Width, mat.Height, (int)mat.Step(), ReturnImage);
+        }
+        internal void Update(RgbImage mat)
+        {
+            Create(mat, mat.ImageBytes, mat.Width, mat.Height, mat.Stride, ReturnImage);
+        }
+        public static ImageReference FromMat(Mat mat,Action<ImageReference> whenReturning)
+        {
+            return new ImageReference(mat, mat.DataStart, mat.Width, mat.Height,(int)mat.Step(), whenReturning);
         }
 
-        public static ImageReference FromMat(Mat mat)
+        public static ImageReference FromRgbImage(RgbImage rgb, Action<ImageReference> whenReturning)
         {
-            return new ImageReference(mat, mat.DataStart, mat.Width, mat.Height,(int)mat.Step());
-        }
-
-        public static ImageReference FromRgbImage(RgbImage rgb)
-        {
-            return new ImageReference(rgb, rgb.ImageBytes, rgb.Width, rgb.Height, rgb.Stride);
+            return new ImageReference(rgb, rgb.ImageBytes, rgb.Width, rgb.Height, rgb.Stride, whenReturning);
         }
 
         public void Release()
@@ -83,5 +88,7 @@ namespace ServiceProvider.Services.Video
             if(underlyingData!=null && underlyingData is IDisposable)
                 ((IDisposable)underlyingData).Dispose();
         }
+
+        
     }
 }

@@ -37,7 +37,7 @@ namespace Videocall.Services.Video
         public int AudioBufferLatency { get; set; } = 0;
         public double AverageLatency { get; set; } = -1;
 
-        public ConcurrentBag<RgbImage> ImagePool = new ConcurrentBag<RgbImage>();
+        //public ConcurrentBag<RgbImage> ImagePool = new ConcurrentBag<RgbImage>();
 
         private object frameQLocker = new object();
         private ICameraProvider capture;
@@ -96,6 +96,7 @@ namespace Videocall.Services.Video
             // audio jitter synchronization
             StartFrameBuffer();
         }
+
         private readonly object locker = new object();
         private bool Execute(StateAction action)
         {
@@ -203,7 +204,7 @@ namespace Videocall.Services.Video
 
         private H264Transcoder SetupTranscoder(int fps, int bps)
         {
-            var transcoder = new H264Transcoder(ImagePool, fps, bps);
+            var transcoder = new H264Transcoder( fps, bps);
 
             transcoder.EncodedFrameAvailable = HandleEncodedFrame;
             //transcoder.EncodedFrameAvailable2 = HandleEncodedFrame2;
@@ -272,14 +273,13 @@ namespace Videocall.Services.Video
 
             Interlocked.Exchange(ref frameQueueCount, 0);
 
-            while (ImagePool.TryTake(out var img))
-                img?.Dispose();
+            transcoder?.FlushPool();
+           
 
             OnLocalImageAvailable?.Invoke(null);
         }
 
        
-        AutoResetEvent capStopped = new AutoResetEvent(false);
         //private void StartCapturing_()
         //{
         //    capStopped.Reset();
@@ -394,14 +394,11 @@ namespace Videocall.Services.Video
 
         Stopwatch sw = new Stopwatch();
         int remainderTime = 0;
-        ImageReference imref = null;
+       
 
         private void StartCapturing_()
         {
-            capStopped.Reset();
             adjustCamSize = false;
-
-            //var frame = new Mat();
 
             sw.Reset();
             remainderTime = 0;
@@ -409,10 +406,9 @@ namespace Videocall.Services.Video
             marshaller.Enqueue(() =>
             {
                 Cap();
-                
-
             });
         }
+
         private void Cap()
         {
             if (currentState == State.CaptureActive)
@@ -423,15 +419,10 @@ namespace Videocall.Services.Video
                     {
                         Thread.Sleep(10);
                         marshaller.Enqueue(Cap) ;
-
-                    }
-                    sw.Restart();//2nd way
-
-                    if (paused)
-                    {
-                        Thread.Sleep(10);
                         return;
                     }
+
+                    sw.Restart();
 
                     if (adjustCamSize)
                     {
@@ -462,7 +453,7 @@ namespace Videocall.Services.Video
                     }
 
 
-                    capture.Retrieve(ref imref);
+                    capture.Retrieve(out ImageReference imref);
                     if (imref == null || imref.Width == 0 || imref.Height == 0)
                     {
                         CaptureFailed("Frame width is 0");
@@ -502,7 +493,6 @@ namespace Videocall.Services.Video
             }
 
 
-            capStopped.Set();
             void CaptureFailed(string message)
             {
                 if (currentState != State.Capturing)
@@ -537,11 +527,11 @@ namespace Videocall.Services.Video
             catch (Exception ex) { ServiceHub.Instance.Log(" Capture encoding failed: ", ex.Message); };
         }
 
-        private void HandleDecodedFrame(RgbImage img)
+        private void HandleDecodedFrame(ImageReference img)
         {
             lock (frameQLocker)
             {
-                if (frameQueue.TryAdd(DateTime.Now, ImageReference.FromRgbImage(img)))
+                if (frameQueue.TryAdd(DateTime.Now, img))
                     Interlocked.Increment(ref frameQueueCount);
             }
             consumerSignal.Set();
@@ -601,8 +591,7 @@ namespace Videocall.Services.Video
         {
             frameQueue?.Clear();
 
-            while(ImagePool.TryTake(out var mat))
-                mat?.Dispose();
+            transcoder?.FlushPool();
 
             AverageLatency = 0;
             avgDivider = 2;
@@ -616,7 +605,6 @@ namespace Videocall.Services.Video
             var newTra= SetupTranscoder(fps, TargetBitrate);
             Interlocked.Exchange(ref transcoder, newTra);
             tra.Dispose();
-
         }
 
 
@@ -775,11 +763,7 @@ namespace Videocall.Services.Video
             transcoder.SetMarkingFeedback(payload, payloadOffset, payloadCount);
         }
 
-        public void ReturnImage(ImageReference image)
-        {
-            if(image.underlyingData is RgbImage)
-                transcoder.ReturnImage((RgbImage)image.underlyingData);
-        }
+       
         public void Dispose()
         {
             Execute(StateAction.Dispose);

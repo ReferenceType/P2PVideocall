@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using ServiceProvider.Services.Video;
 
 namespace Videocall.Services.Video.H264
 {
@@ -20,11 +21,12 @@ namespace Videocall.Services.Video.H264
     {
         public Action<Action<PooledMemoryStream>, int,bool> EncodedFrameAvailable2;
         public Action<byte[], int, bool> EncodedFrameAvailable;
-        public Action<RgbImage> DecodedFrameAvailable;
+        public Action<ImageReference> DecodedFrameAvailable;
         public Action KeyFrameRequested;
         public Action<byte[],int, int> MarkingFeedback;
         public Action<byte[],int,int> LtrRecoveryRequest;
         public ConcurrentBag<RgbImage> imagePool = new ConcurrentBag<RgbImage>();
+        public ConcurrentBag<ImageReference> imrefPool = new ConcurrentBag<ImageReference>();
         private bool DecodeNoDelay = true;
         public bool InvokeAction => EncodedFrameAvailable2!=null;
         public double Duration => jitterBufffer.Duration;
@@ -49,13 +51,13 @@ namespace Videocall.Services.Video.H264
         private ushort decoderHeight;
         int consecutiveError = 0;
         Converter converter = new Converter();
-        public H264Transcoder(ConcurrentBag<RgbImage> matPool,int desiredFps,int desiredBps)
-        {
-            this.imagePool = matPool;
-            fps = desiredFps;
-            bps = desiredBps;
-            jitterBufffer.FrameAvailable += (f) => Decode(f.Data, f.Offset, f.Count,f.w,f.h);
-        }
+        //public H264Transcoder(ConcurrentBag<RgbImage> matPool,int desiredFps,int desiredBps)
+        //{
+        //    this.imagePool = matPool;
+        //    fps = desiredFps;
+        //    bps = desiredBps;
+        //    jitterBufffer.FrameAvailable += (f) => Decode(f.Data, f.Offset, f.Count,f.w,f.h);
+        //}
         public H264Transcoder(int desiredFps, int desiredBps)
         {
             fps = desiredFps;
@@ -292,7 +294,14 @@ namespace Videocall.Services.Video.H264
                     if (succ)
                     {
                         ManageError(statusCode);
-                        DecodedFrameAvailable?.Invoke(rgbImage);
+
+                        imrefPool.TryTake(out var imref);
+                        if (imref == null)
+                            imref = ImageReference.FromRgbImage(rgbImage, ReturnImage);
+                        else
+                            imref.Update(rgbImage);
+
+                        DecodedFrameAvailable?.Invoke(imref);
 
                         keyReq = 0;
                     }
@@ -365,7 +374,13 @@ namespace Videocall.Services.Video.H264
                     CheckMarkingFeedback(statusCode);
                     if (succ)
                     {
-                        DecodedFrameAvailable?.Invoke(rgbImage);
+                        imrefPool.TryTake(out var imref);
+                        if (imref == null)
+                            imref = ImageReference.FromRgbImage(rgbImage, ReturnImage);
+                        else
+                            imref.Update(rgbImage);
+
+                        DecodedFrameAvailable?.Invoke(imref);
                         keyReq = 0;
                         ManageError(statusCode);
 
@@ -554,12 +569,25 @@ namespace Videocall.Services.Video.H264
           
         }
 
-        internal void ReturnImage(RgbImage image)
-        {
+        internal void ReturnImage(ImageReference imref)
+        {   
+            var image = (RgbImage)imref.underlyingData;
+
             if(imagePool.Count<2)
                 imagePool.Add(image);
             else
                 image.Dispose();
+
+            imrefPool.Add(imref);
+
+        }
+
+        internal void FlushPool()
+        {
+            while (imagePool.TryTake(out var img))
+                img?.Dispose();
+
+            imrefPool.Clear();
         }
     }
 }

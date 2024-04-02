@@ -338,12 +338,17 @@ namespace Videocall
 
         public void Disconnect()
         {
-            foreach (var item in registeredPeers)
+            try
             {
-                OnPeerUnregistered?.Invoke(item.Key);
+                foreach (var item in registeredPeers)
+                {
+                    OnPeerUnregistered?.Invoke(item.Key);
+                }
+                registeredPeers.Clear();
+                client.Disconnect();
             }
-            registeredPeers.Clear();
-            client.Disconnect();
+            catch { }
+           
             //client.Dispose();
             //client = null;
             //InitializeClient();

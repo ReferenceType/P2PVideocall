@@ -10,6 +10,6 @@
         bool IsOpened();
         void Open(int camIdx);
         void Release();
-        bool Retrieve(ref ImageReference im);
+        bool Retrieve(out ImageReference im);
     }
 }

@@ -1,4 +1,5 @@
 ﻿
+using ProtoBuf.Meta;
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
@@ -94,7 +95,7 @@ namespace Videocall
             set
             {
                 useWasapi = value;
-                ServiceHub.Instance.AudioHandler.useWasapi = value;
+                //ServiceHub.Instance.AudioHandler.useWasapi = value;
                 OnPropertyChanged();
             }
         }
@@ -110,7 +111,30 @@ namespace Videocall
                 OnPropertyChanged();
             }
         }
+        private int transportLayer = 0;
 
+        public int TransportLayer
+        {
+            get => transportLayer; set
+            {
+                transportLayer = value;
+                string layer = "";
+                switch (transportLayer)
+                {
+                    case 0:
+                        layer = "Udp";
+                        break;
+                    case 1:
+                        layer = "Tcp";
+                        break;
+                    default:
+                        layer = "Udp";
+                        break;
+                }
+                HandleTransportLayerChanged(layer);
+                OnPropertyChanged();
+            }
+        }
         public bool AutoAcceptCalls { get => autoAcceptCalls; set { autoAcceptCalls = value; OnPropertyChanged(); } }
 
 
@@ -142,7 +166,10 @@ namespace Videocall
             string jsonText = File.ReadAllText(path);
             return JsonSerializer.Deserialize<PersistentSettingConfig>(jsonText);
         }
-
+        private void HandleTransportLayerChanged(string value)
+        {
+            ServiceHub.Instance.MessageHandler.TransportLayer = value;
+        }
         protected void OnPropertyChanged([CallerMemberName] string name = null)
         {
             if (dontInvoke) return;
