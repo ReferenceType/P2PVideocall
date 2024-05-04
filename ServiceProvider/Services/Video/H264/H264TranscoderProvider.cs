@@ -13,8 +13,8 @@ namespace Videocall.Services.Video.H264
     {
         static H264TranscoderProvider()
         {
-            H264Sharp.Defines.CiscoDllName32bit = "openh264-2.4.0-win32.dll";
-            H264Sharp.Defines.CiscoDllName64bit = "openh264-2.4.0-win64.dll";
+            //H264Sharp.Defines.CiscoDllName32bit = "openh264-2.4.0-win32.dll";
+            //H264Sharp.Defines.CiscoDllName64bit = "openh264-2.4.0-win64.dll";
         }
        
         public static H264Encoder CreateEncoder(int width, int height, 

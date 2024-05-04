@@ -1,55 +1,36 @@
-﻿using H264Sharp;
-using NetworkLibrary;
+﻿using NetworkLibrary;
 using NetworkLibrary.Components;
 using NetworkLibrary.P2P.Generic;
 using NetworkLibrary.Utils;
-using OpenCvSharp;
-using OpenCvSharp.Extensions;
-using OpenCvSharp.WpfExtensions;
-using ProtoBuf;
-using ProtoBuf.Meta;
-using ProtoBuf.Serializers;
-using Protobuff;
-using Protobuff.P2P;
 using ServiceProvider.Services.Video;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
 using System.Linq;
 using System.Media;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Ink;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
-using System.Windows.Media.Media3D;
 using System.Windows.Threading;
-using System.Xml.Linq;
 using Videocall;
 using Videocall.Models;
 using Videocall.Services.File_Transfer;
 using Videocall.Services.Latency;
 using Videocall.Settings;
 
+// TODO: Disect this god class
 internal class MainWindowModel
 {
 
     private MainWindowViewModel mainWindowViewModel;
     private ServiceHub services;
     private ConcurrentDictionary<Guid, string> peers = new ConcurrentDictionary<Guid, string>();
-    private FileTransferStateManager ftsm = new FileTransferStateManager();
+    private FileTransferStateManager ftsm;
     int busy = 0;
     private SoundPlayer hangupSound = new SoundPlayer(@"hangup2.wav");
     private SoundPlayer receivingCallSound = new SoundPlayer(@"ringtone.wav");
@@ -58,6 +39,7 @@ internal class MainWindowModel
     {
         this.mainWindowViewModel = mainWindowViewModel;
         this.services = services;
+        ftsm = services.FileTransfer;
 
         services.VideoHandler.OnLocalImageAvailable += HandleCameraImage;
         services.VideoHandler.OnBytesAvailable += HandleCameraEncodedBytes;
@@ -75,6 +57,7 @@ internal class MainWindowModel
         services.AudioHandler.OnAudioAvailable += HandleMicrophoneAudio;
         services.LatencyPublisher.Latency += LatencyDataAvailable;
 
+       
         CallStateManager.Instance.StaticPropertyChanged += CallStateChanged;
         HandleScreenshare();
 
@@ -99,38 +82,8 @@ internal class MainWindowModel
         }
 
     }
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
-    [FlagsAttribute]
-    public enum EXECUTION_STATE : uint
-    {
-        ES_AWAYMODE_REQUIRED = 0x00000040,
-        ES_CONTINUOUS = 0x80000000,
-        ES_DISPLAY_REQUIRED = 0x00000002,
-        ES_SYSTEM_REQUIRED = 0x00000001
-        // Legacy flag, should not be used.
-        // ES_USER_PRESENT = 0x00000004
-    }
-    private void PreventSleep()
-    {
-        Task.Run(async () =>
-        {
-            while (true)
-            {
-                await Task.Delay(30000);
-                var currentstate = CallStateManager.GetState();
-                if (currentstate == CallStateManager.CallState.OnCall)
-                {
-                    DispatcherRun(() => SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_AWAYMODE_REQUIRED |  EXECUTION_STATE.ES_DISPLAY_REQUIRED | EXECUTION_STATE.ES_SYSTEM_REQUIRED));
-                }
-                else
-                {
-                    DispatcherRun(() => SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS));
-                }
-            }
 
-        });
-    }
+
     private void CallStateChanged(object sender, PropertyChangedEventArgs e)
     {
 
@@ -196,11 +149,42 @@ internal class MainWindowModel
                 });
             }
         });
-      
-
-
-       
 }
+
+    #region Prevent Sleep
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
+    [FlagsAttribute]
+    public enum EXECUTION_STATE : uint
+    {
+        ES_AWAYMODE_REQUIRED = 0x00000040,
+        ES_CONTINUOUS = 0x80000000,
+        ES_DISPLAY_REQUIRED = 0x00000002,
+        ES_SYSTEM_REQUIRED = 0x00000001
+        // Legacy flag, should not be used.
+        // ES_USER_PRESENT = 0x00000004
+    }
+    private void PreventSleep()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                await Task.Delay(30000);
+                var currentstate = CallStateManager.GetState();
+                if (currentstate == CallStateManager.CallState.OnCall)
+                {
+                    DispatcherRun(() => SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_AWAYMODE_REQUIRED | EXECUTION_STATE.ES_DISPLAY_REQUIRED | EXECUTION_STATE.ES_SYSTEM_REQUIRED));
+                }
+                else
+                {
+                    DispatcherRun(() => SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS));
+                }
+            }
+
+        });
+    }
+    #endregion
 
     #region Message handling
     private void HandleMessage(MessageEnvelope message)
@@ -814,7 +798,7 @@ internal class MainWindowModel
         try
         {
             App.ShowMainWindow();
-
+            
             var callerInfo = services.MessageHandler.Serializer.UnpackEnvelopedMessage<VCPeerInfo>(message);
             //var t1 = AsyncToastNotificationHandler.ShowCallNotification(info.Name);
             Task<string> t2;

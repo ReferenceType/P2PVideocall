@@ -269,8 +269,6 @@ public class MainWindowViewModel : PropertyNotifyBase
     {
         if(selectedPeer != null)
             model.HandleCallUserRequest(selectedPeer);
-
-        
     }
 
     public void HandleDrop(string[] files)

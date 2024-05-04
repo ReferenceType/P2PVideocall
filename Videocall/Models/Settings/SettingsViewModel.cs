@@ -1,5 +1,6 @@
 ﻿using ProtoBuf;
 using ServiceProvider.Services.Audio;
+using ServiceProvider.Services.Audio.Dependency;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;

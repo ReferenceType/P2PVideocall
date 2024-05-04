@@ -169,13 +169,11 @@ namespace Videocall
         internal void ComputeHash()
         {
             System.IO.Hashing.XxHash64 hasher = new System.IO.Hashing.XxHash64();
-            //using (var md5 = new MD5CryptoServiceProvider())
             {
                 using (var stream = File.OpenRead(seed + FilePath))
                 {
                     hasher.Append(stream);
                     Hashcode = BitConverter.ToString(hasher.GetCurrentHash()).Replace("-", "").ToLower();
-                    //Hashcode = BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "").ToLower();
                 }
             }
         }
@@ -193,14 +191,14 @@ namespace Videocall
             StateId = stateId;
         }
     }
-    public class FileShare
+    public class FileTransferHelper
     {
         static ConcurrentProtoSerialiser serialiser = new ConcurrentProtoSerialiser();
         private readonly ConcurrentDictionary<string, FileState> OpenFiles = new ConcurrentDictionary<string, FileState>();
         private readonly string SharedFolderDir;
         private readonly object fileLocker = new object();
         
-        public FileShare()
+        public FileTransferHelper()
         {
             string path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             SharedFolderDir = path + "/Shared";
@@ -209,7 +207,7 @@ namespace Videocall
         {
             FileDirectoryStructure structure = new FileDirectoryStructure();
             structure.FileStructure = new Dictionary<string, List<FileData>>();
-            string TopFolderName = Directory.GetParent(path).FullName;
+            string TopFolderName = Directory.GetParent(path)?.FullName?? path;
 
             structure.seed = TopFolderName;
             if (Directory.Exists(path))

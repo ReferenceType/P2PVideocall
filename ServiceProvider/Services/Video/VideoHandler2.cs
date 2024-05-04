@@ -45,7 +45,6 @@ namespace Videocall.Services.Video
         private readonly ConcurrentDictionary<DateTime, ImageReference> frameQueue = new ConcurrentDictionary<DateTime, ImageReference>();
         private readonly ConcurrentDictionary<Guid, DateTime> timeDict = new ConcurrentDictionary<Guid, DateTime>();
         private readonly ManualResetEvent consumerSignal = new ManualResetEvent(false);
-        private Thread captureThread = null;
         private DateTime lastProcessedTimestamp = DateTime.Now;
         private DateTime latestAck;
         private ConfigType configType = ConfigType.CameraCaptureAdvanced;
@@ -88,8 +87,9 @@ namespace Videocall.Services.Video
         }
         private State currentState;
         SingleThreadDispatcher marshaller = new SingleThreadDispatcher();
-        public VideoHandler2()
+        public VideoHandler2(ICameraProvider capture)
         {
+            this.capture = capture;
             currentState = State.Idle;
             transcoder=SetupTranscoder(fps, TargetBitrate);
            
@@ -238,8 +238,9 @@ namespace Videocall.Services.Video
             OnLocalImageAvailable?.Invoke(null);
             try
             {
-                capture = new WindowsCameraProvider(camIdx);// new VideoCapture(camIdx, VideoCaptureAPIs.WINRT);
-
+                // we need creator for this obj.. dependency injector..
+                //capture = new WindowsCameraProvider(camIdx);// new VideoCapture(camIdx, VideoCaptureAPIs.WINRT);
+                capture.Init(camIdx);
                 capture.Open(camIdx);
                 capture.FrameWidth = frameWidth;
                 capture.FrameHeight = frameHeight;
@@ -266,8 +267,7 @@ namespace Videocall.Services.Video
             OnLocalImageAvailable?.Invoke(null);
             try
             {
-                Interlocked.Exchange(ref capture,null)?.Release();
-              
+                capture.Release();              
             }
             catch { ServiceHub.Instance.Log("Error", "Capture Release Failed"); }
 
@@ -431,7 +431,7 @@ namespace Videocall.Services.Video
                         {
                             capture.Release();
                             capture.Dispose();
-                            capture = new WindowsCameraProvider(camIdx);//new VideoCapture(camIdx, VideoCaptureAPIs.MSMF);
+                            capture.Init(camIdx);//new VideoCapture(camIdx, VideoCaptureAPIs.MSMF);
                             capture.Open(camIdx);
                             capture.FrameWidth = frameWidth;
                             capture.FrameHeight = frameHeight;

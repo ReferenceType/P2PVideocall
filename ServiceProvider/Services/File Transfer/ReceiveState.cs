@@ -19,6 +19,7 @@ namespace Videocall.Services.File_Transfer
         public Action<Completion> Cancelled;
         private Stopwatch sw;
         private FileDirectoryStructure fileTree;
+        private FileTransferHelper fileShare;
         private long TotalReceived;
         public long TotalSize { get; private set; } = 1;
 
@@ -26,8 +27,9 @@ namespace Videocall.Services.File_Transfer
 
         private ServiceHub services => ServiceHub.Instance;
 
-        public ReceiveState(MessageEnvelope fileDirectoryMessage) 
+        public ReceiveState(MessageEnvelope fileDirectoryMessage, FileTransferHelper fs) 
         {
+            this.fileShare = fs;
             AssociatedPeer = fileDirectoryMessage.From;
             StateId = fileDirectoryMessage.MessageId;
             HandleDirectoryMessage(fileDirectoryMessage);
@@ -36,7 +38,7 @@ namespace Videocall.Services.File_Transfer
         private void HandleDirectoryMessage(MessageEnvelope fileDirectoryMessage)
         {
             sw = Stopwatch.StartNew();
-            fileTree = services.FileShare.HandleDirectoryStructure(fileDirectoryMessage);
+            fileTree = fileShare.HandleDirectoryStructure(fileDirectoryMessage);
             TotalSize = fileTree.TotalSize;
             int howManyFiles = fileTree.FileStructure.Values.Select(x => x.Count).Sum();
             GetNext(0);
@@ -73,7 +75,7 @@ namespace Videocall.Services.File_Transfer
         {
             try
             {
-                var fileMsg = services.FileShare.HandleFileTransferMessage(message, out string error);
+                var fileMsg = fileShare.HandleFileTransferMessage(message, out string error);
                 if (!string.IsNullOrEmpty(error))
                 {
                     CancelExplicit("File Integrity Corrupted");

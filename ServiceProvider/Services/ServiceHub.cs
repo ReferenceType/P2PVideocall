@@ -1,5 +1,9 @@
 ﻿using NetworkLibrary;
 using Protobuff;
+using ServiceProvider.Services.Audio;
+using ServiceProvider.Services.Audio.Dependency;
+using ServiceProvider.Services.ScreenShare;
+using ServiceProvider.Services.Video.Camera;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,15 +30,15 @@ namespace Videocall
                 return instance;
             }
         }
-        public AudioHandler AudioHandler { get;}
-        public VideoHandler2 VideoHandler { get;}
+        public AudioHandler AudioHandler { get; private set; }
+        public VideoHandler2 VideoHandler { get; private set; }
 
-        public MessageHandler MessageHandler { get;}
+        public MessageHandler MessageHandler { get; private set; }
 
-        public FileShare FileShare { get;}
+        public FileTransferStateManager FileTransfer { get; private set; }
 
-        public LatencyPublisher LatencyPublisher { get; }
-        public ScreenShareHandlerH264 ScreenShareHandler { get; }
+        public LatencyPublisher LatencyPublisher { get; private set; }
+        public ScreenShareHandlerH264 ScreenShareHandler { get; private set; }
 
         public Action<VCStatistics> VideoStatisticsAvailable;
         public Action<int,int> CamSizeFeedbackAvailable;
@@ -44,30 +48,22 @@ namespace Videocall
       
         private ServiceHub()
         {
-            AudioHandler = new AudioHandler();
-            VideoHandler = new VideoHandler2();
-            FileShare = new FileShare();
+            
+        }
+        public void Initialize(IAudioIn audioIn, IAudioOut audioOut,ICameraProvider camProvider,IScreenCapture screenCapture)
+        {
+            AudioHandler = new AudioHandler(audioIn,audioOut);
+            VideoHandler = new VideoHandler2(camProvider);
+            ScreenShareHandler = new ScreenShareHandlerH264(screenCapture);
+
+            FileTransfer = new FileTransferStateManager(new FileTransferHelper());
             MessageHandler = new MessageHandler();
             LatencyPublisher = new LatencyPublisher(MessageHandler);
-            ScreenShareHandler = new ScreenShareHandlerH264();
 
-            //AudioHandler.StartSpeakers();
             MessageHandler.OnMessageAvailable += HandleMessage;
-            //CallStateManager.Instance.StaticPropertyChanged += CallStateChanged;
             AudioHandler.OnStatisticsAvailable += OnAudioStatsAvailable;
             VideoHandler.CamSizeFeedbackAvailable = (w, h) => CamSizeFeedbackAvailable?.Invoke(w, h);
             PublishStatistics();
-
-            //Reset buffers...
-            // listen yourself
-
-            //FileTransferStateManager.WindowsSize
-            //FileTransferStateManager.ChunkSize
-            //VideoHandler.EnableCongestionAvoidance = SettingsViewModel.Instance.Config.EnableCongestionAvoidance;
-            //SettingsViewModel.Instance.Config.ScreenId;
-            //SettingsViewModel.Instance.Config.GpuId
-            //SettingsViewModel.Instance.Config.MultiThreadedScreenShare
-            //SettingsViewModel.Instance.Config.SCTargetBps
         }
 
         private void PublishStatistics()
@@ -115,18 +111,7 @@ namespace Videocall
             VideoHandler.AudioBufferLatency = AudioHandler.BufferedDurationAvg;
         }
 
-        //private void CallStateChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
-        //{
-        //    var currState = CallStateManager.GetState();
-        //    if (currState == CallStateManager.CallState.OnCall ||
-        //        currState == CallStateManager.CallState.Available)
-        //    {
-        //        AudioHandler.ResetStatistics();
-        //        AudioHandler.FlushBuffers();
-        //        VideoHandler.FlushBuffers();
-        //    }
-        //}
-
+       
         public void ResetBuffers()
         {
             AudioHandler.ResetStatistics();

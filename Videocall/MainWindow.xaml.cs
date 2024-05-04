@@ -1,7 +1,11 @@
 ﻿using MessageProtocol;
+using Microsoft.Toolkit.Uwp.Notifications;
 using NetworkLibrary;
 using NetworkLibrary.Utils;
 using Protobuff;
+using ServiceProvider.Services.Audio.Dependency;
+using ServiceProvider.Services.ScreenShare;
+using ServiceProvider.Services.Video.Camera;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -32,7 +36,6 @@ namespace Videocall
 
         VideoHandler2 VideoHandler { get; set; }
 
-        FileShare FileShare { get; set; }
 
         MessageHandler MessageHandler { get; set; }
         internal LatencyPublisher LatencyPublisher { get; }
@@ -45,6 +48,8 @@ namespace Videocall
 
         public MainWindow()
         {
+            // Requires Microsoft.Toolkit.Uwp.Notifications NuGet package version 7.0 or greater
+           
             Environment.SetEnvironmentVariable("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0");
             OpenCvSharp.Cv2.SetNumThreads(1);
 
@@ -52,9 +57,13 @@ namespace Videocall
             MiniLogger.AllLog += Console.WriteLine;
 
             ServiceHub hub = ServiceHub.Instance;
+            hub.Initialize(new WasapiInAdapter(),
+                           new WasapiOutAdapter(),
+                           new WindowsCameraProvider(),
+                           new DxCaptureProvider());
+           
             AudioHandler = hub.AudioHandler;
             VideoHandler = hub.VideoHandler;
-            FileShare = hub.FileShare;
             MessageHandler = hub.MessageHandler;
             LatencyPublisher = hub.LatencyPublisher;
             ScreenShareHandler = hub.ScreenShareHandler;

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 
@@ -30,20 +31,22 @@ namespace Videocall.Services.File_Transfer
         int WindowSize = FileTransferStateManager.WindowsSize;
         //int windowSize = Math.Max(1, (int)(WindowSize / int.Parse(PersistentSettingConfig.Instance.ChunkSize)));
         private int AllSent;
-
         private bool forceTCP => services.MessageHandler.FTTransportLayer == "Tcp";
         private ServiceHub services => ServiceHub.Instance;
         private AutoResetEvent signal = new AutoResetEvent(false);
         int exit = 0;
-        public SendState(string[] files, Guid selectedPeer)
+        private FileTransferHelper fileShare;
+
+        public SendState(string[] files, Guid selectedPeer,FileTransferHelper fs)
         {
+            fileShare = fs;
             AssociatedPeer = selectedPeer;
             StateId = Guid.NewGuid();
             Thread thread = new Thread(SendRoutine);
             thread.Start();
             sw = Stopwatch.StartNew();
-            ThreadPool.UnsafeQueueUserWorkItem((s) =>
-                ExtractDirectoryTree(files), null);
+
+            ThreadPool.UnsafeQueueUserWorkItem((s) =>ExtractDirectoryTree(files), null);
           
         }
       
@@ -51,8 +54,8 @@ namespace Videocall.Services.File_Transfer
         {
             try
             {
-                tree = services.FileShare.CreateDirectoryTree(files[0]);
-                fileDatas = services.FileShare.GetFiles(ref tree, chunkSize: FileTransferStateManager.ChunkSize);
+                tree = fileShare.CreateDirectoryTree(files[0]);
+                fileDatas = fileShare.GetFiles(ref tree, chunkSize: FileTransferStateManager.ChunkSize);
                 TotalSize = tree.TotalSize;
 
                 var message = new MessageEnvelope()

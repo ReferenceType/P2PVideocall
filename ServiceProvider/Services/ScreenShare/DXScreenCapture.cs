@@ -23,30 +23,38 @@ namespace Videocall.Services.ScreenShare
     using SharpDX.Direct2D1;
     using Bitmap = System.Drawing.Bitmap;
     using System.Collections.Concurrent;
-    using OpenCvSharp;
-    using OpenCvSharp.Extensions;
     using System.Runtime.InteropServices;
     using System.Windows.Forms;
-    using SharpDX.Mathematics.Interop;
-    using System.Security.Cryptography;
-    using SharpDX.Win32;
+
 
     public class EncodedBmp
     {
         public MemoryStream stream;
         public int Width, Height, Stride, startInx;
-
-        public EncodedBmp(MemoryStream stream, int width, int height, int stride, int startInx)
+        private Action<EncodedBmp> OnReturn;
+        private readonly object locker =  new object();
+        public EncodedBmp(MemoryStream stream, int width, int height, int stride, int startInx, Action<EncodedBmp> onReturn)
         {
             this.stream = stream;
             Width = width;
             Height = height;
             this.Stride = stride;
             this.startInx = startInx;
+            OnReturn = onReturn;
+        }
+
+        public void ReturnResources()
+        {
+            lock (locker)
+            {
+                OnReturn?.Invoke(this);
+                OnReturn = null!;
+            }
+          
         }
     }
 
-    public class DXScreenCapture : IDisposable
+    public class DXScreenCapture : IDisposable, IScreenCapture
     {
         private D3D11.Device d3dDevice;
         private OutputDuplication outputDuplication;
@@ -71,9 +79,9 @@ namespace Videocall.Services.ScreenShare
             using (var dxgiOutput = output.QueryInterface<DXGI.Output1>())
             {
                 this.d3dDevice = new D3D11.Device(dxgiAdapter,
-#if DEBUG
-                    D3D11.DeviceCreationFlags.Debug |
-#endif
+//#if DEBUG
+//                    D3D11.DeviceCreationFlags.Debug |
+//#endif
                     D3D11.DeviceCreationFlags.BgraSupport); // for D2D support
 
                 outputDuplication = dxgiOutput.DuplicateOutput(this.d3dDevice);
@@ -88,7 +96,7 @@ namespace Videocall.Services.ScreenShare
 
         }
 
-        public EncodedBmp Draw(MemoryStream stream = null)
+        private EncodedBmp Draw(MemoryStream stream = null)
         {
             if (stream == null)
             {
@@ -193,7 +201,7 @@ namespace Videocall.Services.ScreenShare
 
                                     var buff = stream.GetBuffer();
                                     // 54 is info header of encoded bmp.
-                                    var rgb = new EncodedBmp(stream, desc.Width, desc.Height, -stride, data_ptr + 54);
+                                    var rgb = new EncodedBmp(stream, desc.Width, desc.Height, -stride, data_ptr + 54, ReturnImage);
 
                                     return rgb;
 
@@ -212,7 +220,7 @@ namespace Videocall.Services.ScreenShare
         }
 
         Bitmap bitmap = null;
-        void DrawCursor(float scale, D2D.DeviceContext dc)
+        private void DrawCursor(float scale, D2D.DeviceContext dc)
         {
             // Drawing Cursor
 
@@ -272,6 +280,7 @@ namespace Videocall.Services.ScreenShare
             while (streamBag.TryTake(out var s))
                 s.Dispose();
         }
+
         ConcurrentBag<MemoryStream> streamBag = new ConcurrentBag<MemoryStream>();
         public void CaptureAuto(int targetFrameRate, Action<EncodedBmp> onCaptured)
         {
@@ -294,10 +303,9 @@ namespace Videocall.Services.ScreenShare
                 streamBag.Add(new MemoryStream());
             }
             Interlocked.Exchange(ref capture, 1);
-#if DEBUG
+
             Stopwatch sw = Stopwatch.StartNew();
             int fNum = 0;
-#endif
 
             Stopwatch measure = Stopwatch.StartNew();
             captureThread = new Thread(() =>
@@ -306,28 +314,19 @@ namespace Videocall.Services.ScreenShare
                 while (capture == 1)
                 {
                     int requiredInterval = 1000 / TargetFps;
-                   
+
                     measure.Restart();
                     EncodedBmp img;
                     if (!streamBag.TryTake(out var stream))
                         stream = new MemoryStream();
                     img = Draw(stream);
 
-                    //Console.WriteLine(Enum.GetName(typeof(PixelFormat), img.PixelFormat));
                     if (img != null)
                     {
 
                         onCaptured?.Invoke(img);
 
-                        //measure.Stop();
-
-                        //var procTime = measure.ElapsedMilliseconds;
-                        //int offset = 5;
-                        //sleep -= (int)procTime;
-                        //sleep -= offset;
-                        //sleep = Math.Max(0, sleep);
-
-                        int dt = (int)measure.ElapsedMilliseconds+remainder;
+                        int dt = (int)measure.ElapsedMilliseconds + remainder;
                         while (dt < requiredInterval)
                         {
                             Thread.Sleep(1);
@@ -335,7 +334,7 @@ namespace Videocall.Services.ScreenShare
                         }
                         remainder = dt - requiredInterval;
                     }
-#if DEBUG
+
                     // print fps
                     fNum++;
                     if (sw.ElapsedMilliseconds > 1000)
@@ -344,15 +343,14 @@ namespace Videocall.Services.ScreenShare
                         fNum = 0;
                         sw.Restart();
                     }
-#endif
-                    //Thread.Sleep(requiredInterval);
+
                 }
             });
             captureThread.Start();
             Interlocked.Exchange(ref acquire, 0);
         }
 
-        public void ReturnImage(EncodedBmp im)
+        private void ReturnImage(EncodedBmp im)
         {
             streamBag.Add(im.stream);
         }
@@ -376,8 +374,7 @@ namespace Videocall.Services.ScreenShare
                 textureDc?.Dispose();
                 textureDc = null;
                 disposedValue = true;
-                while (streamBag.TryTake(out var s))
-                    s.Dispose();
+                
             }
         }
 

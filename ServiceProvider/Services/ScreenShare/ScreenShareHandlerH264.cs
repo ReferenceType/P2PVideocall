@@ -41,11 +41,10 @@ namespace Videocall.Services.ScreenShare
         private Resolution resolution = Resolution._1180p;
 
         private ConcurrentQueue<EncodedBmp> EncodedBitmapQueue = new ConcurrentQueue<EncodedBmp>();
-        private ConcurrentStack<ImageData> ImageDataPool = new ConcurrentStack<ImageData>();
 
         private ManualResetEvent encoderRunning = new ManualResetEvent(true);
         private AutoResetEvent startEncoding = new AutoResetEvent(false);
-        private DXScreenCapture screenCapture = new DXScreenCapture();
+        private IScreenCapture screenCapture = new DXScreenCapture();
         private H264Transcoder transcoder;
         private Thread encodethread = null;
         private ConfigType configType = ConfigType.CameraCaptureAdvanced;
@@ -59,8 +58,9 @@ namespace Videocall.Services.ScreenShare
         private bool captureActive = false;
         private bool pendingChanges = false;
      
-        public ScreenShareHandlerH264()
+        public ScreenShareHandlerH264(IScreenCapture screenCapture)
         {
+            this.screenCapture = screenCapture;
             SetupTranscoder();
         }
        
@@ -100,8 +100,7 @@ namespace Videocall.Services.ScreenShare
                     CalculateResolutionPreserveRatio(screenWidth, screenHeight, maxPixelsize, out var frameHeight, out var frameWidth);
                     scale = frameWidth / screenWidth;
                 }
-                if (screenCapture == null)
-                    screenCapture = new DXScreenCapture();
+               // screenCapture = new DXScreenCapture();
                 screenCapture.Init(scale, ScreenId, GpuId);
                 keyFrameRequested = true;
 
@@ -140,7 +139,7 @@ namespace Videocall.Services.ScreenShare
                                                       img.Width * img.Height * 3);
 
                        Encode(data_);
-                       screenCapture.ReturnImage(img);
+                       img.ReturnResources();
 
                    }
                    else
@@ -224,10 +223,16 @@ namespace Videocall.Services.ScreenShare
                             encoderRunning.Reset();
                             while (EncodedBitmapQueue.TryDequeue(out var img))
                             {
-                                ImageData data = new ImageData(ImageType.Bgr, img.Width, img.Height, img.Stride, img.stream.GetBuffer(), img.startInx, img.Width * img.Height * 3);
+                                ImageData data = new ImageData(ImageType.Bgr,
+                                                               img.Width,
+                                                               img.Height,
+                                                               img.Stride,
+                                                               img.stream.GetBuffer(),
+                                                               img.startInx,
+                                                               img.Width * img.Height * 3);
 
                                 Encode(data);
-                                screenCapture.ReturnImage(img);
+                                img.ReturnResources();
 
                             }
                             encoderRunning.Set();
@@ -299,9 +304,8 @@ namespace Videocall.Services.ScreenShare
             try
             {
                 captureActive = false;
-                screenCapture?.StopCapture();
-                screenCapture?.Dispose();
-                screenCapture = null;
+                screenCapture.StopCapture();
+                screenCapture.Dispose();
                 LocalImageAvailable?.Invoke(null);
 
             }

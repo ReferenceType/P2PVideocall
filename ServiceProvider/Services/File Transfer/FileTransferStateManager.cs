@@ -1,14 +1,5 @@
-﻿using NetworkLibrary.P2P.Generic;
-using NetworkLibrary;
-using ProtoBuf.Meta;
-using System;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
-using System.Security.Policy;
+﻿using NetworkLibrary;
 using System.Collections.Concurrent;
-using System.Xml.Linq;
-using System.Xml;
 
 namespace Videocall.Services.File_Transfer
 {
@@ -44,11 +35,17 @@ namespace Videocall.Services.File_Transfer
         public Action<IFileTransferState,Completion> OnReceiveComplete;
         public Action<IFileTransferState,Completion> OnTransferCancelled;
         public Action<IFileTransferState,Completion> OnReceiveCancelled;
-        private ServiceHub services => ServiceHub.Instance;
+       // private ServiceHub services => ServiceHub.Instance;
         private ConcurrentDictionary<Guid, IFileTransferState> activeStates = new ConcurrentDictionary<Guid, IFileTransferState>();
 
         public static int WindowsSize = 12800000;
         public static int ChunkSize = 128000;
+        private FileTransferHelper fs;
+        public FileTransferStateManager(FileTransferHelper fs)
+        {
+            this.fs = fs;
+        }
+
         public void CancelExplicit(Guid stateId)
         {
             if(activeStates.TryGetValue(stateId, out var state))
@@ -71,7 +68,7 @@ namespace Videocall.Services.File_Transfer
 
         public void SendFile(string[] files, Guid selectedPeer)
         {
-            var sendState = new SendState(files, selectedPeer);
+            var sendState = new SendState(files, selectedPeer, fs);
             sendState.OnProgress += (sts) => OnTransferStatus?.Invoke(sendState,sts);
             sendState.Completed =(c) => HandleCompletedSend(sendState,c);
             sendState.Cancelled =(c) => HandleCancelledSend(sendState,c);
@@ -80,7 +77,7 @@ namespace Videocall.Services.File_Transfer
 
         public void HandleReceiveFile(MessageEnvelope message)
         {
-           var receiveState =  new ReceiveState(message);
+           var receiveState =  new ReceiveState(message,fs);
             receiveState.OnProgress += (sts) => OnReceiveStatus?.Invoke(receiveState,sts);
             receiveState.OnCompleted = (c) => HandleCompletionReceive(receiveState, c);
             receiveState.Cancelled = (c) => HandleCancelledReceive(receiveState, c);
@@ -91,7 +88,7 @@ namespace Videocall.Services.File_Transfer
         {
             OnTransferCancelled?.Invoke(sendState, c);
             activeStates.TryRemove(sendState.StateId, out _);
-            services.FileShare.CleanUp(sendState.StateId);
+            fs.CleanUp(sendState.StateId);
             sendState.Cleanup();
         }
 
@@ -99,7 +96,7 @@ namespace Videocall.Services.File_Transfer
         {
             OnTransferComplete?.Invoke(sendState, completion);
             activeStates.TryRemove(sendState.StateId, out _);
-            services.FileShare.CleanUp(sendState.StateId);
+            fs.CleanUp(sendState.StateId);
             sendState.Cleanup();
 
         }
@@ -108,14 +105,14 @@ namespace Videocall.Services.File_Transfer
         {
             OnReceiveCancelled?.Invoke(receiveState,c);
             activeStates.TryRemove(receiveState.StateId, out _);
-            services.FileShare.CleanUp(receiveState.StateId);
+            fs.CleanUp(receiveState.StateId);
         }
 
         private void HandleCompletionReceive(ReceiveState receiveState,Completion completion)
         {
             OnReceiveComplete?.Invoke(receiveState,completion);
             activeStates.TryRemove(receiveState.StateId, out _);
-            services.FileShare.CleanUp(receiveState.StateId);
+            fs.CleanUp(receiveState.StateId);
         }
 
         public bool HandleMessage(MessageEnvelope message)
@@ -135,7 +132,7 @@ namespace Videocall.Services.File_Transfer
                 state.CancelExplicit("User Cancelled");
             }
 
-            services.FileShare.ReleaseAll();
+            fs.ReleaseAll();
         }
     }
 }

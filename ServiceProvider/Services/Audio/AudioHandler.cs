@@ -1,13 +1,9 @@
-﻿using NAudio.Codecs;
-using NAudio.CoreAudioApi;
-using NAudio.CoreAudioApi.Interfaces;
-using NAudio.Wave;
-using NAudio.Wave.SampleProviders;
-using NetworkLibrary;
+﻿using NetworkLibrary;
 using NetworkLibrary.Components;
 using NetworkLibrary.Utils;
 using ServiceProvider.Services;
 using ServiceProvider.Services.Audio;
+using ServiceProvider.Services.Audio.Dependency;
 
 namespace Videocall
 {
@@ -38,29 +34,29 @@ namespace Videocall
 
         }
 
-        
-
         public int JitterBufferMaxCapacity
         {
             get => jitterBufferMaxCapacity;
             set
             {
                 if (value < jitterBufferMaxCapacity)
-                    jitterBuffer.DiscardSamples((int)soundListenBuffer.BufferDuration.TotalMilliseconds / captureInterval);
+                    jitterBuffer.DiscardSamples((int)player.BufferDuration.TotalMilliseconds / captureInterval);
                 // drop the amount of buffered duration
                 jitterBufferMaxCapacity = value;
                 jitterBuffer.BufferLatency = value;
                // OutBufferCapacity=value+100;
             }
         }
+
         public float Gain { get => gain;
             set 
             {
-                volumeSampleProvider.Volume = value;
+                player.Volume = value;
                 gain = value;
             } 
         }
-        public TimeSpan BufferedDuration => soundListenBuffer.BufferedDuration;
+
+        public TimeSpan BufferedDuration => player.BufferedDuration;
 
         public bool RectifySignal { get; set; }
         public bool EnableSoundVisualData { get; set; }
@@ -70,16 +66,13 @@ namespace Videocall
         public List<DeviceInfo> InputDevices = new List<DeviceInfo>();
         public DeviceInfo SelectedDevice = null;
 
-        private IWavePlayer player;
-        private IWaveIn waveIn;
-
-        private BufferedWaveProvider soundListenBuffer;
+        private IAudioOut player;
+        private IAudioIn waveIn;
         private JitterBuffer jitterBuffer;
         private G722CodecState encoderState;
         private G722CodecState decoderState;
         private G722Codec codec;
-        private WaveFormat format = new WaveFormat(24000, 16, 1);
-        private VolumeSampleProvider volumeSampleProvider;
+        private Waveformat format = new Waveformat(24000, 16, 1);
         private Queue<AudioSample> delayedSamples =  new Queue<AudioSample>();
         private SharerdMemoryStreamPool streamPool = new SharerdMemoryStreamPool();
         private ushort currentSqnNo;
@@ -95,6 +88,7 @@ namespace Videocall
         private readonly object operationLocker = new object();
         private readonly object commandLocker = new object();
         private readonly object networkLocker = new object();
+
         private bool useWasapi = true;
         
         private SingleThreadDispatcher marshaller;
@@ -111,8 +105,10 @@ namespace Videocall
        
         DeviceState outState;
         private DeviceState inState;
-        public AudioHandler()
+        public AudioHandler(IAudioIn input, IAudioOut player)
         {
+            this.waveIn = input;
+            this.player = player;
             marshaller = new SingleThreadDispatcher();
             EnumerateDevices();
 
@@ -125,13 +121,7 @@ namespace Videocall
             decoderState = new G722CodecState(bitrate, G722Flags.None);
             codec = new G722Codec();
 
-            soundListenBuffer = new BufferedWaveProvider(format);
-            soundListenBuffer.BufferLength = 320 * format.AverageBytesPerSecond / 1000;
-            soundListenBuffer.DiscardOnBufferOverflow = true;
-
-            volumeSampleProvider = new VolumeSampleProvider(soundListenBuffer.ToSampleProvider());
-            volumeSampleProvider.Volume = Gain;
-
+           
             Task.Run(async () =>
             {
                 while (true)
@@ -156,32 +146,15 @@ namespace Videocall
 
         private void EnumerateDevicesInternal()
         {
-            if (useWasapi)
-            {
-                InputDevices.Clear();
-                var enumerator = new MMDeviceEnumerator();
-                foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, NAudio.CoreAudioApi.DeviceState.Active))
-                {
-                    InputDevices.Add(new DeviceInfo() { Name = wasapi.FriendlyName });
-                }
-                var inp = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-                enumerator.Dispose();
-
-                if (inp == null)
-                    return;
-
-                SelectedDevice= InputDevices.Where(x => x.Name == inp.FriendlyName).FirstOrDefault()!;
-                InputDevicesUpdated?.Invoke();
-
-            }
+            InputDevices = waveIn.EnumerateDevices();
+            SelectedDevice= waveIn.SelectedDevice;
         }
 
         public void ResetDevices()
         {
-            
             marshaller.Enqueue(() =>
             {
-                bool playAgain= outState== DeviceState.Playing;
+                bool playAgain= outState == DeviceState.Playing;
                 bool captureAgain = inState == DeviceState.Playing;
 
                 if(inState != DeviceState.Uninitialized)
@@ -214,69 +187,14 @@ namespace Videocall
 
         private void InitInputDevice()
         {
-
             if (inState != DeviceState.Uninitialized)
             {
                 return;
             }
-
-            if (useWasapi)
-            {
-                MMDevice inputDevice = null;
-
-                var enumerator = new MMDeviceEnumerator();
-                List<MMDevice> devices = new List<MMDevice>();
-                foreach (MMDevice wasapi in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, NAudio.CoreAudioApi.DeviceState.Active))
-                {
-                    devices.Add(wasapi);
-                }
-
-                if (SelectedDevice != null)
-                {
-                    inputDevice = devices.Where(x => x.FriendlyName == SelectedDevice.Name).FirstOrDefault()!;
-
-                }
-
-                if (inputDevice == null)
-                {
-                    inputDevice = new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
-                }
-
-                if (inputDevice == null)
-                {
-                    return;
-                }
-                var waveIn_ = new WasapiCapture(inputDevice, true, captureInterval);
-                waveIn_.WaveFormat = format;
-                waveIn_.DataAvailable += MicrophoneSampleAvailable;
-                var old = Interlocked.Exchange(ref waveIn, waveIn_);
-                //if (old != null && ((WasapiCapture)old).CaptureState == CaptureState.Capturing)
-                //{
-                //    old.StopRecording();
-                //    old.Dispose();
-                //    waveIn.StartRecording();
-                //}
-            }
-            else
-            {
-
-                var waveIn_ = new WaveInEvent();
-                waveIn_.BufferMilliseconds = captureInterval;
-                waveIn_.WaveFormat = format;
-                waveIn_.DataAvailable += MicrophoneSampleAvailable;
-
-                var old = Interlocked.Exchange(ref waveIn, waveIn_);
-                if (old != null)
-                {
-                    old.StopRecording();
-                    old.Dispose();
-                    waveIn.StartRecording();
-                }
-            }
+            waveIn.Init(format,20);
+            waveIn.SampleAvailable += MicrophoneSampleAvailable;
 
             inState = DeviceState.Initialized;
-
-
         }
 
         private void InitOutputDevice()
@@ -285,25 +203,10 @@ namespace Videocall
             {
                 return;
             }
-            if (useWasapi)
-            {
-                var outputDevice = new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Render, Role.Communications);
-                if (outputDevice == null)
-                    return;
-                var player_ = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 60);
-                player_.Init(volumeSampleProvider);
-                Interlocked.Exchange(ref player, player_)?.Dispose();
-            }
-            else
-            {
-                var player_ = new WaveOutEvent();
-                player_.DesiredLatency = 60;
-                player_.Init(volumeSampleProvider);
-                Interlocked.Exchange(ref player, player_)?.Dispose();
-
-            }
+            player.Init(format);
             outState= DeviceState.Initialized;
         }
+
         private void UninitializeOutputDev()
         {
             if (outState != DeviceState.Uninitialized)
@@ -313,53 +216,17 @@ namespace Videocall
                 outState= DeviceState.Uninitialized;
             }
         }
-        bool valueActive = false;
-        bool operRunning = false;
-        int lastVal= 0; 
-        private async void ResizeOutputBuffer(int ms)
-        {
-            valueActive = true;
-            lastVal = ms;
-
-            if(operRunning)
-                return;
-            Top:
-            operRunning = true;
-            marshaller.Enqueue(() =>
-            {
-                bool replay = outState == DeviceState.Playing;
-
-                soundListenBuffer.ClearBuffer();
-                UninitializeOutputDev();
-                soundListenBuffer = new BufferedWaveProvider(format);
-                soundListenBuffer.BufferLength = lastVal * format.AverageBytesPerSecond / 1000;
-                soundListenBuffer.DiscardOnBufferOverflow = true;
-                InitOutputDevice();
-
-               // if(replay)
-                    StartSpeakers();
-
-            });
-            await Task.Delay(500);
-            if (!valueActive)
-                operRunning = false;
-            else
-            {
-                valueActive = false;
-               goto Top;
-            }
-           
-        }
-        private void MicrophoneSampleAvailable(object sender, WaveInEventArgs e)
+      
+        private void MicrophoneSampleAvailable(byte[]buffer,int offset, int BytesRecorded)
         {
             try
             {
-                captureInterval= 1000/(format.AverageBytesPerSecond/e.BytesRecorded);
+                captureInterval= 1000/(format.AverageBytesPerSecond/BytesRecorded);
                 if(jitterBuffer.CaptureInterval!= captureInterval)
                     jitterBuffer.CaptureInterval = captureInterval;
 
                 byte[] res;
-                res = EncodeG722(e.Buffer, 0, e.BytesRecorded, out int encoded);
+                res = EncodeG722(buffer, offset, BytesRecorded, out int encoded);
                 currentSqnNo++;
                 AudioSample sample = new AudioSample()
                 {
@@ -370,7 +237,7 @@ namespace Videocall
                 };
 
                 if (EnableSoundVisualData)
-                    CalculateAudioVisualData(e.Buffer, 0, e.BytesRecorded);
+                    CalculateAudioVisualData(buffer, 0, BytesRecorded);
 
                 if (LoopbackAudio)
                 {
@@ -446,10 +313,10 @@ namespace Videocall
                 int pos = DecodeStream.Position32;
                 int offset_ = 0;
 
-                soundListenBuffer?.AddSamples(buffer, offset_, pos);
+                player?.AddSamples(buffer, offset_, pos);
                 streamPool.ReturnStream(DecodeStream);
 
-                var current = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds + jitterBuffer.Duration;
+                var current = (int)player.BufferedDuration.TotalMilliseconds + jitterBuffer.Duration;
                 BufferedDurationAvg = (50 * BufferedDurationAvg + current) / 51;
             });
 
@@ -577,35 +444,7 @@ namespace Videocall
             BufferPool.ReturnBuffer(buffer);
             BufferPool.ReturnBuffer(outputBuffer);
         }
-        private byte[] EncodeMlaw(byte[] data, int offset, int length)
-        {
-            var encoded = new byte[length / 2];
-            int outIndex = 0;
-            for (int n = 0; n < length; n += 2)
-            {
-                encoded[outIndex++] = MuLawEncoder.LinearToMuLawSample(BitConverter.ToInt16(data, offset + n));
-            }
-            return encoded;
-        }
-
-        private void DecodeMlaw(PooledMemoryStream decodeInto, byte[] data, int offset, int length)
-        {
-            if(decodeInto.Length < length*2)
-                decodeInto.SetLength( length*2);
-
-            var decoded = decodeInto.GetBuffer();
-            int outIndex = 0;
-            for (int n = 0; n < length; n++)
-            {
-                short decodedSample = MuLawDecoder.MuLawToLinearSample(data[n + offset]);
-
-                decoded[outIndex++] = (byte)(decodedSample & 0xFF);
-                decoded[outIndex++] = (byte)(decodedSample >> 8);
-            }
-            decodeInto.Position = length * 2;
-
-
-        }
+        
 
         #endregion
 
@@ -618,8 +457,8 @@ namespace Videocall
         {
             var data = new AudioStatistics()
             {
-                BufferedDuration = (int)soundListenBuffer.BufferedDuration.TotalMilliseconds,
-                BufferSize = (int)soundListenBuffer.BufferDuration.TotalMilliseconds,
+                BufferedDuration = (int)player.BufferedDuration.TotalMilliseconds,
+                BufferSize = (int)player.BufferDuration.TotalMilliseconds,
                 TotalNumDroppedPackages = jitterBuffer.NumLostPackages,
                 NumLostPackages = (jitterBuffer.NumLostPackages - lastLostPackckageAmount) / 10,
             };
@@ -823,10 +662,7 @@ namespace Videocall
 
         public int DataLenght;
     }
-    public class DeviceInfo
-    {
-        public string Name { get; set; }
-    }
+   
     public struct AudioStatistics
     {
         public int BufferSize;

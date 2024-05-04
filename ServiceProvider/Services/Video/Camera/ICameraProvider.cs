@@ -7,6 +7,7 @@
 
         void Dispose();
         bool Grab();
+        void Init(int camIdx);
         bool IsOpened();
         void Open(int camIdx);
         void Release();

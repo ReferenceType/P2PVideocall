@@ -12,19 +12,22 @@ namespace ServiceProvider.Services.Video.Camera
     {
         private ConcurrentBag<Mat> mats = new ConcurrentBag<Mat>();
         private ConcurrentBag<ImageReference> imrefs = new ConcurrentBag<ImageReference>();
-        readonly VideoCapture capture;
+        private VideoCapture capture;
         private int frameWidth => capture.FrameWidth;
         private int frameHeight => capture.FrameHeight;
 
-        public WindowsCameraProvider(int camIdx)
+        public WindowsCameraProvider()
         {
-            capture = new VideoCapture(camIdx, VideoCaptureAPIs.MSMF);
         }
 
         public int FrameWidth { get => frameWidth; set { capture.FrameWidth = value; } }
         public int FrameHeight { get => frameHeight; set => capture.FrameHeight = value; }
 
+        public void Init(int camIdx)
+        {
+            capture = new VideoCapture(camIdx, VideoCaptureAPIs.MSMF);
 
+        }
         public void Open(int camIdx)
         {
             capture.Open(camIdx);
@@ -42,7 +45,7 @@ namespace ServiceProvider.Services.Video.Camera
 
         public void Dispose()
         {
-            capture.Dispose();
+            capture?.Dispose();
         }
 
         public bool Grab()
@@ -88,5 +91,7 @@ namespace ServiceProvider.Services.Video.Camera
             imrefs.Add(reference);
             mats.Add((Mat)reference.underlyingData);
         }
+
+        
     }
 }
